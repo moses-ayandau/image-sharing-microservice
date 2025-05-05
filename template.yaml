@@ -5,58 +5,353 @@ Description: >
 
   Sample SAM Template for photo-processing-blog
 
+# Parameter section
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    Description: Environment name (dev, test, prod)
+    AllowedValues:
+      - dev
+      - test
+      - prod
+
+  CognitoUserPoolId:
+    Type: String
+    Description: ID of the Cognito User Pool
+
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
     Timeout: 20
     MemorySize: 512
-
-    # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
+    Runtime: java21
     LoggingConfig:
       LogFormat: JSON
-Resources:
-  HelloWorldFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-    Properties:
-      CodeUri: HelloWorldFunction
-      Handler: helloworld.App::handleRequest
-      Runtime: java21
-      Architectures:
-      - x86_64
-      MemorySize: 512
-      Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
-        Variables:
-          PARAM1: VALUE
-      Events:
-        HelloWorld:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
-          Properties:
-            Path: /hello
-            Method: get
 
-  ApplicationResourceGroup:
-    Type: AWS::ResourceGroups::Group
+Resources:
+  # API Gateway
+  ApiGateway:
+    Type: AWS::Serverless::Api
     Properties:
-      Name:
-        Fn::Sub: ApplicationInsights-SAM-${AWS::StackName}
-      ResourceQuery:
-        Type: CLOUDFORMATION_STACK_1_0
-  ApplicationInsightsMonitoring:
-    Type: AWS::ApplicationInsights::Application
+      StageName: !Ref Environment
+      BinaryMediaTypes:
+        - image/jpeg
+        - image/png
+        - image/gif
+        - multipart/form-data
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: "'https://mscv2group1.link'"
+        MaxAge: "'3600'"
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt CognitoUserPool.Arn
+        AddDefaultAuthorizerToCorsPreflight: false
+      Tags:
+        Environment: !Ref Environment
+
+  # Cognito Resources
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
     Properties:
-      ResourceGroupName:
-        Ref: ApplicationResourceGroup
-      AutoConfigurationEnabled: 'true'
+      UserPoolName: !Sub "${Environment}-PhotoBlogUserPool"
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          RequireUppercase: true
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Mutable: false
+          Required: true
+        - Name: username
+          AttributeDataType: String
+          Required: false
+      LambdaConfig:
+        PostConfirmation: !GetAtt WelcomeEmailLambda.Arn
+        PostAuthentication: !GetAtt SigninAlertLambda.Arn
+
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref CognitoUserPool
+      ClientName: !Sub "${Environment}-PhotoBlogAppClient"
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+
+  # SES Resources
+  SESDomainIdentity:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: noreply@mscv2group1.link
+
+  # S3 Resources
+  StagingBucket:
+    Type: AWS::S3::Bucket
+    DependsOn:
+      - ProcessImageFunction
+      - InvokePermission
+    Properties:
+      BucketName: !Sub "${Environment}-group2-staging-bucket"
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: [ '*' ]
+            AllowedMethods: [ GET, PUT, POST, DELETE, HEAD ]
+            AllowedOrigins: [ '*' ]
+            MaxAge: 3000
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: 's3:ObjectCreated:*'
+            Function: !GetAtt ProcessImageFunction.Arn
+
+  ProcessedBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${Environment}-processed-bucket"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  BackupBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-backup-${Environment}"
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # DynamoDB Resources
+  ImageTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${Environment}-images"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: imageId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: imageId
+          KeyType: HASH
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # SQS Resources
+  ImageProcessingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${AWS::StackName}-image-processing-${Environment}"
+      VisibilityTimeout: 300
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ImageProcessingDLQ.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  ImageProcessingDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${AWS::StackName}-image-processing-dlq-${Environment}"
+      MessageRetentionPeriod: 1209600  # 14 days
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  RetryQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${Environment}-retry-queue"
+      DelaySeconds: 300  # 5 minutes delay for retry
+      MessageRetentionPeriod: 1209600  # 14 days
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${Environment}-dlq"
+      MessageRetentionPeriod: 1209600  # 14 days
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Lambda Functions
+  WelcomeEmailLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-welcome-email"
+      Handler: com.amalitechphotoappcognitoauth.WelcomeEmailHandler::handleRequest
+      CodeUri: photo-blog-auth/
+      Policies:
+        - AmazonSESFullAccess
+      Timeout: 30
+      Tags:
+        Environment: !Ref Environment
+
+  SigninAlertLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-signin-alert"
+      Handler: com.amalitechphotoappcognitoauth.SigninAlertHandler::handleRequest
+      CodeUri: photo-blog-auth/
+      Policies:
+        - AmazonSESFullAccess
+      Timeout: 30
+      Tags:
+        Environment: !Ref Environment
+
+  UploadImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-upload-image"
+      Handler: image-upload.handler.UploadImageHandler
+      CodeUri: ./
+      Environment:
+        Variables:
+          STAGING_BUCKET: !Ref StagingBucket
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref StagingBucket
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /upload
+            Method: post
+      Tags:
+        Environment: !Ref Environment
+
+  ProcessImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-process-image"
+      Handler: image-upload.handler.ProcessImageHandler
+      CodeUri: ./
+      Environment:
+        Variables:
+          PROCESSED_BUCKET: !Ref ProcessedBucket
+          IMAGE_TABLE: !Ref ImageTable
+          RETRY_QUEUE: !Ref RetryQueue
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref StagingBucket
+        - S3CrudPolicy:
+            BucketName: !Ref ProcessedBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ImageTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt RetryQueue.QueueName
+      Tags:
+        Environment: !Ref Environment
+
+  RetryProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-retry-processor"
+      Handler: image-upload.handler.RetryProcessorHandler
+      CodeUri: ./
+      Environment:
+        Variables:
+          STAGING_BUCKET: !Ref StagingBucket
+          PROCESSED_BUCKET: !Ref ProcessedBucket
+          IMAGE_TABLE: !Ref ImageTable
+          RETRY_QUEUE: !Ref RetryQueue
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref StagingBucket
+        - S3CrudPolicy:
+            BucketName: !Ref ProcessedBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ImageTable
+        - SQSPollerPolicy:
+            QueueName: !GetAtt RetryQueue.QueueName
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt RetryQueue.Arn
+            BatchSize: 1
+      Tags:
+        Environment: !Ref Environment
+
+  # Lambda Permissions
+  LambdaInvokePermissionWelcome:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt WelcomeEmailLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt CognitoUserPool.Arn
+
+  LambdaInvokePermissionSignin:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt SigninAlertLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt CognitoUserPool.Arn
+
+  InvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ProcessImageFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !GetAtt StagingBucket.Arn
+
 Outputs:
-  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
-  # Find out more about other implicit resources you can reference within SAM
-  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
-  HelloWorldApi:
-    Description: API Gateway endpoint URL for Prod stage for Hello World function
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
-  HelloWorldFunction:
-    Description: Hello World Lambda Function ARN
-    Value: !GetAtt HelloWorldFunction.Arn
-  HelloWorldFunctionIamRole:
-    Description: Implicit IAM Role created for Hello World function
-    Value: !GetAtt HelloWorldFunctionRole.Arn
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/"
+
+  StagingBucketName:
+    Description: S3 Bucket for staging uploaded images
+    Value: !Ref StagingBucket
+
+  ProcessedBucketName:
+    Description: S3 Bucket for processed images
+    Value: !Ref ProcessedBucket
+
+  BackupBucketName:
+    Description: S3 Bucket for image backups
+    Value: !Ref BackupBucket
+
+  ImagesTableName:
+    Description: DynamoDB table for images metadata
+    Value: !Ref ImageTable
+
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref CognitoUserPool
+
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref CognitoUserPoolClient

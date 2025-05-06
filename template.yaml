@@ -326,7 +326,6 @@ Resources:
     Properties:
       CodeUri: ./
       Handler: com.handler.HandleDeleteImage::handleRequest
-      Runtime: java21
       MemorySize: 512
       Timeout: 10
       Policies:
@@ -347,7 +346,6 @@ Resources:
     Properties:
       CodeUri: ./
       Handler: com.handler.RestoreImageFromBin::handleRequest
-      Runtime: java21
       MemorySize: 512
       Timeout: 10
       Policies:
@@ -368,7 +366,6 @@ Resources:
     Properties:
       CodeUri: ./
       Handler: com.handler.PermanentlyDeleteImage::handleRequest
-      Runtime: java17
       MemorySize: 512
       Timeout: 10
       Policies:

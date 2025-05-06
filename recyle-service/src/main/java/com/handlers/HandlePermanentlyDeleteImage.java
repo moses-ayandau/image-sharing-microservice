@@ -11,12 +11,12 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
 import java.util.Map;
 
-public class PermanentlyDeleteImage implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
+public class HandlePermanentlyDeleteImage implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
 
     private final DynamoDBUtils dynamoDBUtils;
     private final S3Utils s3Utils;
 
-    public PermanentlyDeleteImage(DynamoDBUtils dynamoDBUtils, S3Utils s3Utils) {
+    public HandlePermanentlyDeleteImage(DynamoDBUtils dynamoDBUtils, S3Utils s3Utils) {
         this.dynamoDBUtils = dynamoDBUtils;
         this.s3Utils = s3Utils;
     }

@@ -31,17 +31,27 @@ public class GetDeletedImagesHandler implements RequestHandler<APIGatewayProxyRe
 
     public APIGatewayProxyResponseEvent handleRequest(final APIGatewayProxyRequestEvent input, final Context context) {
         try {
-            // Create a scan request to filter for inactive images
+            // Get the user ID from the request
+            Map<String, String> queryParams = input.getQueryStringParameters();
+            if (queryParams == null || !queryParams.containsKey("userId")) {
+                return ResponseUtils.errorResponse("User ID is required", 400);
+            }
+            
+            String userId = queryParams.get("userId");
+            
+            // Create a scan request to filter for inactive images for this user
             Map<String, AttributeValue> expressionAttributeValues = new HashMap<>();
             expressionAttributeValues.put(":statusValue", AttributeValue.builder().s("inactive").build());
+            expressionAttributeValues.put(":userIdValue", AttributeValue.builder().s(userId).build());
             
             // Use expression attribute names to handle reserved keywords
             Map<String, String> expressionAttributeNames = new HashMap<>();
             expressionAttributeNames.put("#status", "status");
+            expressionAttributeNames.put("#userId", "userId");
             
             ScanRequest scanRequest = ScanRequest.builder()
                     .tableName(tableName)
-                    .filterExpression("#status = :statusValue")
+                    .filterExpression("#status = :statusValue AND #userId = :userIdValue")
                     .expressionAttributeValues(expressionAttributeValues)
                     .expressionAttributeNames(expressionAttributeNames)
                     .build();

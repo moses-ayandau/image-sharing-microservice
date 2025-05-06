@@ -32,17 +32,25 @@ public class GetActiveImagesHandler implements RequestHandler<APIGatewayProxyReq
 
     public APIGatewayProxyResponseEvent handleRequest(final APIGatewayProxyRequestEvent input, final Context context) {
         try {
-            // Create a scan request to filter for active images
+            // Get the user ID from the request
+            String userId = input.getPathParameters().get("userId");
+            if (userId == null) {
+                return ResponseUtils.errorResponse("User ID is required", 400);
+            }
+
+            // Create a scan request to filter for active images for this user
             Map<String, AttributeValue> expressionAttributeValues = new HashMap<>();
             expressionAttributeValues.put(":statusValue", AttributeValue.builder().s("active").build());
+            expressionAttributeValues.put(":userIdValue", AttributeValue.builder().s(userId).build());
             
             // Use expression attribute names to handle reserved keywords
             Map<String, String> expressionAttributeNames = new HashMap<>();
             expressionAttributeNames.put("#status", "status");
+            expressionAttributeNames.put("#userId", "userId");
             
             ScanRequest scanRequest = ScanRequest.builder()
                     .tableName(tableName)
-                    .filterExpression("#status = :statusValue")
+                    .filterExpression("#status = :statusValue AND #userId = :userIdValue")
                     .expressionAttributeValues(expressionAttributeValues)
                     .expressionAttributeNames(expressionAttributeNames)
                     .build();

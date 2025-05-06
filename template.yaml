@@ -1,9 +1,9 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  recycle-service
+  photo-processing-blog
 
-  SAM Template for recycle-service
+  Sample SAM Template for photo-processing-blog
 
 # Parameter section
 Parameters:
@@ -16,6 +16,10 @@ Parameters:
       - test
       - prod
 
+  CognitoUserPoolId:
+    Type: String
+    Description: ID of the Cognito User Pool
+
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
@@ -26,287 +30,407 @@ Globals:
       LogFormat: JSON
 
 Resources:
-  # S3 Bucket for storing images
-  ImageBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "${Environment}-image-sharing-bucket"
-      VersioningConfiguration:
-        Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldVersions
-            Status: Enabled
-            NoncurrentVersionExpiration:
-              NoncurrentDays: 30
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-
-  # S3 Bucket for recycled images with multi-region and disaster recovery
-  RecycleBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "${Environment}-image-recycle-bucket"
-      VersioningConfiguration:
-        Status: Enabled
-      # Enable replication for disaster recovery
-      ReplicationConfiguration:
-        Role: !GetAtt RecycleBucketReplicationRole.Arn
-        Rules:
-          - Id: ReplicateEverything
-            Status: Enabled
-            Prefix: ""
-            Destination:
-              Bucket: !Sub "arn:aws:s3:::${Environment}-image-recycle-bucket-replica"
-              StorageClass: STANDARD_IA
-      # Multi-region access points are configured through AWS Management Console or CLI
-      # Here we set up the basic configuration for disaster recovery
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldVersions
-            Status: Enabled
-            NoncurrentVersionExpiration:
-              NoncurrentDays: 90  # Longer retention for recycled items
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-
-  # Replica bucket for disaster recovery
-  RecycleBucketReplica:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "${Environment}-image-recycle-bucket-replica"
-      VersioningConfiguration:
-        Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldVersions
-            Status: Enabled
-            NoncurrentVersionExpiration:
-              NoncurrentDays: 90
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-
-  # IAM Role for S3 replication
-  RecycleBucketReplicationRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: s3.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonS3FullAccess
-
-  # DynamoDB Table for image metadata
-  MetadataTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: !Sub "${Environment}-image-metadata"
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: userId
-          AttributeType: S
-        - AttributeName: imageId
-          AttributeType: S
-      KeySchema:
-        - AttributeName: userId
-          KeyType: HASH
-        - AttributeName: imageId
-          KeyType: RANGE
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-
   # API Gateway
   ApiGateway:
     Type: AWS::Serverless::Api
     Properties:
       StageName: !Ref Environment
+      BinaryMediaTypes:
+        - image/jpeg
+        - image/png
+        - image/gif
+        - multipart/form-data
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
         AllowHeaders: "'Content-Type,Authorization'"
-        AllowOrigin: "'*'"
+        AllowOrigin: "'https://mscv2group1.link'"
         MaxAge: "'3600'"
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt CognitoUserPool.Arn
+        AddDefaultAuthorizerToCorsPreflight: false
       Tags:
         Environment: !Ref Environment
+
+  # Cognito Resources
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "${Environment}-PhotoBlogUserPool"
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          RequireUppercase: true
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Mutable: false
+          Required: true
+        - Name: username
+          AttributeDataType: String
+          Required: false
+      LambdaConfig:
+        PostConfirmation: !GetAtt WelcomeEmailLambda.Arn
+        PostAuthentication: !GetAtt SigninAlertLambda.Arn
+
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref CognitoUserPool
+      ClientName: !Sub "${Environment}-PhotoBlogAppClient"
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+
+  # SES Resources
+  SESDomainIdentity:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: noreply@mscv2group1.link
+
+  # S3 Resources
+  StagingBucket:
+    Type: AWS::S3::Bucket
+    DependsOn:
+      - ProcessImageFunction
+      - InvokePermission
+    Properties:
+      BucketName: !Sub "${Environment}-group2-staging-bucket"
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: [ '*' ]
+            AllowedMethods: [ GET, PUT, POST, DELETE, HEAD ]
+            AllowedOrigins: [ '*' ]
+            MaxAge: 3000
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: 's3:ObjectCreated:*'
+            Function: !GetAtt ProcessImageFunction.Arn
+
+  ProcessedBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${Environment}-processed-bucket"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+      LifecycleConfiguration:
+        Rules:
+          - Id: AutoDeleteDeletedObjects
+            Prefix: deleted/
+            Status: Enabled
+            ExpirationInDays: 7
+
+  BackupBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-backup-${Environment}"
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # DynamoDB Resources
+  ImageTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ImageMetadata
+      AttributeDefinitions:
+        - AttributeName: ImageId
+          AttributeType: S
+        - AttributeName: OwnerId
+          AttributeType: S
+        - AttributeName: Status
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ImageId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      GlobalSecondaryIndexes:
+        - IndexName: OwnerStatusIndex
+          KeySchema:
+            - AttributeName: OwnerId
+              KeyType: HASH
+            - AttributeName: Status
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: DeletedAt
+        Enabled: true
+
+
+  # SQS Resources
+  ImageProcessingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${AWS::StackName}-image-processing-${Environment}"
+      VisibilityTimeout: 300
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ImageProcessingDLQ.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  ImageProcessingDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${AWS::StackName}-image-processing-dlq-${Environment}"
+      MessageRetentionPeriod: 1209600  # 14 days
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  RetryQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${Environment}-retry-queue"
+      DelaySeconds: 300  # 5 minutes delay for retry
+      MessageRetentionPeriod: 1209600  # 14 days
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${Environment}-dlq"
+      MessageRetentionPeriod: 1209600  # 14 days
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
 
   # Lambda Functions
-  RecycleServiceFunction:
+  WelcomeEmailLambda:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub "${Environment}-recycle-service"
-      Handler: com.App::handleRequest
-      CodeUri: recycle-service/
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /recycle
-            Method: get
+      FunctionName: !Sub "${Environment}-welcome-email"
+      Handler: com.amalitechphotoappcognitoauth.WelcomeEmailHandler::handleRequest
+      CodeUri: photo-blog-auth/
+      Policies:
+        - AmazonSESFullAccess
+      Timeout: 30
       Tags:
         Environment: !Ref Environment
-      Policies:
-        - S3ReadPolicy:
-            BucketName: !Ref ImageBucket
-        - DynamoDBReadPolicy:
-            TableName: !Ref MetadataTable
 
-  # Delete Image Handler - Moves images to recycle bin
-  DeleteImageFunction:
+  SigninAlertLambda:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub "${Environment}-delete-image"
-      Handler: com.DeleteImageHandler::handleRequest
-      CodeUri: recycle-service/
-      Environment:
-        Variables:
-          PRIMARY_BUCKET: !Ref ImageBucket
-          RECYCLE_BUCKET: !Ref RecycleBucket
-          METADATA_TABLE: !Ref MetadataTable
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /recycle/delete
-            Method: post
+      FunctionName: !Sub "${Environment}-signin-alert"
+      Handler: com.amalitechphotoappcognitoauth.SigninAlertHandler::handleRequest
+      CodeUri: photo-blog-auth/
+      Policies:
+        - AmazonSESFullAccess
+      Timeout: 30
       Tags:
         Environment: !Ref Environment
-      Policies:
-        - S3CrudPolicy:
-            BucketName: !Ref ImageBucket
-        - S3CrudPolicy:
-            BucketName: !Ref RecycleBucket
-        - DynamoDBCrudPolicy:
-            TableName: !Ref MetadataTable
 
-  # Recover Image Handler - Recovers images from recycle bin
-  RecoverImageFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub "${Environment}-recover-image"
-      Handler: com.RecoverImageHandler::handleRequest
-      CodeUri: recycle-service/
-      Environment:
-        Variables:
-          PRIMARY_BUCKET: !Ref ImageBucket
-          RECYCLE_BUCKET: !Ref RecycleBucket
-          METADATA_TABLE: !Ref MetadataTable
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /recycle/recover
-            Method: post
-      Tags:
-        Environment: !Ref Environment
-      Policies:
-        - S3CrudPolicy:
-            BucketName: !Ref ImageBucket
-        - S3CrudPolicy:
-            BucketName: !Ref RecycleBucket
-        - DynamoDBCrudPolicy:
-            TableName: !Ref MetadataTable
-
-  # Permanently Delete Image Handler - Permanently deletes images from recycle bin
-  PermanentDeleteImageFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub "${Environment}-permanent-delete-image"
-      Handler: com.PermanentlyDeleteImageHandler::handleRequest
-      CodeUri: recycle-service/
-      Environment:
-        Variables:
-          PRIMARY_BUCKET: !Ref ImageBucket
-          RECYCLE_BUCKET: !Ref RecycleBucket
-          METADATA_TABLE: !Ref MetadataTable
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /recycle/permanent-delete
-            Method: post
-      Tags:
-        Environment: !Ref Environment
-      Policies:
-        - S3CrudPolicy:
-            BucketName: !Ref ImageBucket
-        - S3CrudPolicy:
-            BucketName: !Ref RecycleBucket
-        - DynamoDBCrudPolicy:
-            TableName: !Ref MetadataTable
-
-  # Upload Image Handler - Uploads images to S3 bucket
   UploadImageFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "${Environment}-upload-image"
-      Handler: com.UploadImageHandler::handleRequest
-      CodeUri: recycle-service/
+      Handler: image-upload.handler.UploadImageHandler
+      CodeUri: ./
       Environment:
         Variables:
-          PRIMARY_BUCKET: !Ref ImageBucket
-          RECYCLE_BUCKET: !Ref RecycleBucket
-          METADATA_TABLE: !Ref MetadataTable
+          STAGING_BUCKET: !Ref StagingBucket
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref StagingBucket
       Events:
         ApiEvent:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
-            Path: /images/upload
+            Path: /upload
             Method: post
       Tags:
         Environment: !Ref Environment
+
+  ProcessImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-process-image"
+      Handler: image-upload.handler.ProcessImageHandler
+      CodeUri: ./
+      Environment:
+        Variables:
+          PROCESSED_BUCKET: !Ref ProcessedBucket
+          IMAGE_TABLE: !Ref ImageTable
+          RETRY_QUEUE: !Ref RetryQueue
       Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref StagingBucket
         - S3CrudPolicy:
-            BucketName: !Ref ImageBucket
-        - S3CrudPolicy:
-            BucketName: !Ref RecycleBucket
+            BucketName: !Ref ProcessedBucket
         - DynamoDBCrudPolicy:
-            TableName: !Ref MetadataTable
+            TableName: !Ref ImageTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt RetryQueue.QueueName
+      Tags:
+        Environment: !Ref Environment
+
+  RetryProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-retry-processor"
+      Handler: image-upload.handler.RetryProcessorHandler
+      CodeUri: ./
+      Environment:
+        Variables:
+          STAGING_BUCKET: !Ref StagingBucket
+          PROCESSED_BUCKET: !Ref ProcessedBucket
+          IMAGE_TABLE: !Ref ImageTable
+          RETRY_QUEUE: !Ref RetryQueue
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref StagingBucket
+        - S3CrudPolicy:
+            BucketName: !Ref ProcessedBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ImageTable
+        - SQSPollerPolicy:
+            QueueName: !GetAtt RetryQueue.QueueName
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt RetryQueue.Arn
+            BatchSize: 1
+      Tags:
+        Environment: !Ref Environment
+
+  HandleDeleteImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: com.handler.HandleDeleteImage::handleRequest
+      MemorySize: 512
+      Timeout: 10
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ImageTable
+        - S3CrudPolicy:
+            BucketName: !Ref ProcessedBucket
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /images/{imageId}/delete
+            Method: POST
+
+    # 🔹 Lambda Function: Restore Image from Recycle Bin
+  RestoreImageFromBinFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: com.handler.RestoreImageFromBin::handleRequest
+      MemorySize: 512
+      Timeout: 10
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ImageTable
+        - S3CrudPolicy:
+            BucketName: !Ref ProcessedBucket
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /images/{imageId}/restore
+            Method: POST
+
+    # 🔹 Lambda Function: Permanent Deletion
+  PermanentlyDeleteImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: com.handler.PermanentlyDeleteImage::handleRequest
+      MemorySize: 512
+      Timeout: 10
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ImageTable
+        - S3CrudPolicy:
+            BucketName: !Ref ProcessedBucket
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /images/{imageId}/permanent-delete
+            Method: DELETE
+
+  # Lambda Permissions
+  LambdaInvokePermissionWelcome:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt WelcomeEmailLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt CognitoUserPool.Arn
+
+  LambdaInvokePermissionSignin:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt SigninAlertLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt CognitoUserPool.Arn
+
+  InvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ProcessImageFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !GetAtt StagingBucket.Arn
 
 Outputs:
   ApiEndpoint:
     Description: API Gateway endpoint URL
     Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/"
 
-  RecycleServiceFunction:
-    Description: Recycle Service Lambda Function ARN
-    Value: !GetAtt RecycleServiceFunction.Arn
+  StagingBucketName:
+    Description: S3 Bucket for staging uploaded images
+    Value: !Ref StagingBucket
 
-  DeleteImageFunction:
-    Description: Delete Image Lambda Function ARN
-    Value: !GetAtt DeleteImageFunction.Arn
+  ProcessedBucketName:
+    Description: S3 Bucket for processed images
+    Value: !Ref ProcessedBucket
 
-  RecoverImageFunction:
-    Description: Recover Image Lambda Function ARN
-    Value: !GetAtt RecoverImageFunction.Arn
+  BackupBucketName:
+    Description: S3 Bucket for image backups
+    Value: !Ref BackupBucket
 
-  PermanentDeleteImageFunction:
-    Description: Permanent Delete Image Lambda Function ARN
-    Value: !GetAtt PermanentDeleteImageFunction.Arn
+  ImagesTableName:
+    Description: DynamoDB table for images metadata
+    Value: !Ref ImageTable
 
-  UploadImageFunction:
-    Description: Upload Image Lambda Function ARN
-    Value: !GetAtt UploadImageFunction.Arn
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref CognitoUserPool
 
-  ImageBucketName:
-    Description: Name of the S3 bucket for storing images
-    Value: !Ref ImageBucket
-
-  RecycleBucketName:
-    Description: Name of the S3 bucket for recycled images
-    Value: !Ref RecycleBucket
-
-  MetadataTableName:
-    Description: Name of the DynamoDB table for image metadata
-    Value: !Ref MetadataTable
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref CognitoUserPoolClient

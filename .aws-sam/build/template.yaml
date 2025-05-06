@@ -1,0 +1,276 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'recycle-service
+
+  SAM Template for recycle-service
+
+  '
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    Description: Environment name (dev, test, prod)
+    AllowedValues:
+    - dev
+    - test
+    - prod
+Globals:
+  Function:
+    Timeout: 20
+    MemorySize: 512
+    Runtime: java21
+    LoggingConfig:
+      LogFormat: JSON
+Resources:
+  ImageBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: ${Environment}-image-sharing-bucket
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+        - Id: DeleteOldVersions
+          Status: Enabled
+          NoncurrentVersionExpiration:
+            NoncurrentDays: 30
+      Tags:
+      - Key: Environment
+        Value:
+          Ref: Environment
+  MetadataTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Fn::Sub: ${Environment}-image-metadata
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: userId
+        AttributeType: S
+      - AttributeName: imageId
+        AttributeType: S
+      KeySchema:
+      - AttributeName: userId
+        KeyType: HASH
+      - AttributeName: imageId
+        KeyType: RANGE
+      Tags:
+      - Key: Environment
+        Value:
+          Ref: Environment
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName:
+        Ref: Environment
+      Cors:
+        AllowMethods: '''GET,POST,PUT,DELETE,OPTIONS'''
+        AllowHeaders: '''Content-Type,Authorization'''
+        AllowOrigin: '''*'''
+        MaxAge: '''3600'''
+      Tags:
+        Environment:
+          Ref: Environment
+  RecycleServiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-recycle-service
+      Handler: com.App::handleRequest
+      CodeUri: RecycleServiceFunction
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGateway
+            Path: /recycle
+            Method: get
+      Tags:
+        Environment:
+          Ref: Environment
+      Policies:
+      - S3ReadPolicy:
+          BucketName:
+            Ref: ImageBucket
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: MetadataTable
+    Metadata:
+      SamResourceId: RecycleServiceFunction
+  DeleteImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-delete-image
+      Handler: com.DeleteImageHandler::handleRequest
+      CodeUri: DeleteImageFunction
+      Environment:
+        Variables:
+          PRIMARY_BUCKET:
+            Ref: ImageBucket
+          METADATA_TABLE:
+            Ref: MetadataTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGateway
+            Path: /recycle/delete
+            Method: post
+      Tags:
+        Environment:
+          Ref: Environment
+      Policies:
+      - S3CrudPolicy:
+          BucketName:
+            Ref: ImageBucket
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: MetadataTable
+    Metadata:
+      SamResourceId: DeleteImageFunction
+  RecoverImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-recover-image
+      Handler: com.RecoverImageHandler::handleRequest
+      CodeUri: RecoverImageFunction
+      Environment:
+        Variables:
+          PRIMARY_BUCKET:
+            Ref: ImageBucket
+          METADATA_TABLE:
+            Ref: MetadataTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGateway
+            Path: /recycle/recover
+            Method: post
+      Tags:
+        Environment:
+          Ref: Environment
+      Policies:
+      - S3CrudPolicy:
+          BucketName:
+            Ref: ImageBucket
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: MetadataTable
+    Metadata:
+      SamResourceId: RecoverImageFunction
+  PermanentDeleteImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-permanent-delete-image
+      Handler: com.PermanentlyDeleteImageHandler::handleRequest
+      CodeUri: PermanentDeleteImageFunction
+      Environment:
+        Variables:
+          PRIMARY_BUCKET:
+            Ref: ImageBucket
+          METADATA_TABLE:
+            Ref: MetadataTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGateway
+            Path: /recycle/permanent-delete
+            Method: post
+      Tags:
+        Environment:
+          Ref: Environment
+      Policies:
+      - S3CrudPolicy:
+          BucketName:
+            Ref: ImageBucket
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: MetadataTable
+    Metadata:
+      SamResourceId: PermanentDeleteImageFunction
+  UploadImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${Environment}-upload-image
+      Handler: com.UploadImageHandler::handleRequest
+      CodeUri: UploadImageFunction
+      Environment:
+        Variables:
+          PRIMARY_BUCKET:
+            Ref: ImageBucket
+          METADATA_TABLE:
+            Ref: MetadataTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGateway
+            Path: /images/upload
+            Method: post
+      Tags:
+        Environment:
+          Ref: Environment
+      Policies:
+      - S3CrudPolicy:
+          BucketName:
+            Ref: ImageBucket
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: MetadataTable
+    Metadata:
+      SamResourceId: UploadImageFunction
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value:
+      Fn::Sub: https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/
+  RecycleServiceFunction:
+    Description: Recycle Service Lambda Function ARN
+    Value:
+      Fn::GetAtt:
+      - RecycleServiceFunction
+      - Arn
+  DeleteImageFunction:
+    Description: Delete Image Lambda Function ARN
+    Value:
+      Fn::GetAtt:
+      - DeleteImageFunction
+      - Arn
+  RecoverImageFunction:
+    Description: Recover Image Lambda Function ARN
+    Value:
+      Fn::GetAtt:
+      - RecoverImageFunction
+      - Arn
+  PermanentDeleteImageFunction:
+    Description: Permanent Delete Image Lambda Function ARN
+    Value:
+      Fn::GetAtt:
+      - PermanentDeleteImageFunction
+      - Arn
+  UploadImageFunction:
+    Description: Upload Image Lambda Function ARN
+    Value:
+      Fn::GetAtt:
+      - UploadImageFunction
+      - Arn
+  ImageBucketName:
+    Description: Name of the S3 bucket for storing images
+    Value:
+      Ref: ImageBucket
+  MetadataTableName:
+    Description: Name of the DynamoDB table for image metadata
+    Value:
+      Ref: MetadataTable

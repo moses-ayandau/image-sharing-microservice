@@ -125,6 +125,12 @@ Resources:
       Tags:
         - Key: Environment
           Value: !Ref Environment
+      LifecycleConfiguration:
+        Rules:
+          - Id: AutoDeleteDeletedObjects
+            Prefix: deleted/
+            Status: Enabled
+            ExpirationInDays: 7
 
   BackupBucket:
     Type: AWS::S3::Bucket
@@ -145,17 +151,31 @@ Resources:
   ImageTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub "${Environment}-images"
-      BillingMode: PAY_PER_REQUEST
+      TableName: ImageMetadata
       AttributeDefinitions:
-        - AttributeName: imageId
+        - AttributeName: ImageId
+          AttributeType: S
+        - AttributeName: OwnerId
+          AttributeType: S
+        - AttributeName: Status
           AttributeType: S
       KeySchema:
-        - AttributeName: imageId
+        - AttributeName: ImageId
           KeyType: HASH
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
+      BillingMode: PAY_PER_REQUEST
+      GlobalSecondaryIndexes:
+        - IndexName: OwnerStatusIndex
+          KeySchema:
+            - AttributeName: OwnerId
+              KeyType: HASH
+            - AttributeName: Status
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: DeletedAt
+        Enabled: true
+
 
   # SQS Resources
   ImageProcessingQueue:
@@ -300,6 +320,68 @@ Resources:
             BatchSize: 1
       Tags:
         Environment: !Ref Environment
+
+  HandleDeleteImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: com.handler.HandleDeleteImage::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 10
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ImageTable
+        - S3CrudPolicy:
+            BucketName: !Ref ProcessedBucket
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /images/{imageId}/delete
+            Method: POST
+
+    # 🔹 Lambda Function: Restore Image from Recycle Bin
+  RestoreImageFromBinFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: com.handler.RestoreImageFromBin::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 10
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ImageTable
+        - S3CrudPolicy:
+            BucketName: !Ref ProcessedBucket
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /images/{imageId}/restore
+            Method: POST
+
+    # 🔹 Lambda Function: Permanent Deletion
+  PermanentlyDeleteImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: com.handler.PermanentlyDeleteImage::handleRequest
+      Runtime: java17
+      MemorySize: 512
+      Timeout: 10
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ImageTable
+        - S3CrudPolicy:
+            BucketName: !Ref ProcessedBucket
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /images/{imageId}/permanent-delete
+            Method: DELETE
 
   # Lambda Permissions
   LambdaInvokePermissionWelcome:

@@ -3,7 +3,7 @@
 version = 0.1
 
 [default.global.parameters]
-stack_name = "photo-processing-blog"
+stack_name = "image-processor"
 
 [default.build.parameters]
 cached = true

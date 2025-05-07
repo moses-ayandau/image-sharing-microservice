@@ -11,29 +11,36 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
 import java.util.Map;
 
-public class HandlePermanentlyDeleteImage implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
+public class PermanentlyDeleteImageHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
 
-    private final DynamoDBUtils dynamoDBUtils;
-    private final S3Utils s3Utils;
-
-    public HandlePermanentlyDeleteImage(DynamoDBUtils dynamoDBUtils, S3Utils s3Utils) {
-        this.dynamoDBUtils = dynamoDBUtils;
-        this.s3Utils = s3Utils;
-    }
-
+    private final S3Utils s3Utils = new S3Utils();
+    private final DynamoDBUtils dynamoUtils = new DynamoDBUtils();
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
         try {
+            if (input.getPathParameters() == null || input.getQueryStringParameters() == null) {
+                return ResponseUtils.errorResponse(400, "Missing required path or query parameters");
+            }
+
             String imageId = input.getPathParameters().get("imageId");
             String ownerId = input.getQueryStringParameters().get("ownerId");
 
-            Map<String, AttributeValue> item = dynamoDBUtils.getItemFromDynamo(imageId);
+            // Validate actual parameter values
+            if (imageId == null || imageId.trim().isEmpty()) {
+                return ResponseUtils.errorResponse(400, "Missing or empty 'imageId'");
+            }
+
+            if (ownerId == null || ownerId.trim().isEmpty()) {
+                return ResponseUtils.errorResponse(400, "Missing or empty 'ownerId'");
+            }
+
+            Map<String, AttributeValue> item = dynamoUtils.getItemFromDynamo(imageId);
             s3Utils.validateOwnership(item, ownerId);
 
             String key = item.get("S3Key").s();
             s3Utils.deleteObject(key);
-            dynamoDBUtils.deleteRecordFromDynamo(imageId);
+            dynamoUtils.deleteRecordFromDynamo(imageId);
 
             return ResponseUtils.successResponse(200, "Image permanently deleted");
 

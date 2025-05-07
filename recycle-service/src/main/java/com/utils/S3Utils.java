@@ -7,7 +7,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import java.util.Map;
 
 public class S3Utils {
-    private static final String BUCKET_NAME = "mscv2group1-asset-bucket";
+    private static final String BUCKET_NAME = System.getenv("BUCKET_NAME");
 
 
     private final S3Client s3Client;

@@ -8,7 +8,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class DynamoDBUtils {
-    private static final String TABLE_NAME = "ImageMetadata";
+    private static final String TABLE_NAME = System.getenv("TABLE_NAME");
 
     private final DynamoDbClient dynamoDbClient;
 

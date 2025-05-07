@@ -24,30 +24,25 @@ public class RecoverImageHandler implements RequestHandler<APIGatewayProxyReques
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent request, Context context) {
+        String imageId;
+        String userId;
         if (request == null || request.getBody() == null || request.getBody().isEmpty()) {
             return ResponseUtils.errorResponse(400, "Invalid request");
         }
-
-        String userId = request.getHeaders().get("userId");
+        userId = request.getHeaders().get("userId");
         if (userId == null || userId.isEmpty()) {
             return ResponseUtils.errorResponse(400, "Missing userId header");
         }
 
-        String imageId;
         try {
             JsonNode bodyJson = mapper.readTree(request.getBody());
             imageId = bodyJson.get("imageId").asText();
             if (imageId == null || imageId.isEmpty()) {
                 return ResponseUtils.errorResponse(400, "Missing imageId");
             }
-        } catch (Exception e) {
-            return ResponseUtils.errorResponse(400, "Invalid JSON body: " + e.getMessage());
-        }
 
-        String originalKey = "images/" + userId + "/" + imageId;
-        String recycleKey = userId + "/" + imageId;
-
-        try {
+            String originalKey = "images/" + userId + "/" + imageId;
+            String recycleKey = userId + "/" + imageId;
             // Fetch metadata and validate user ownership
             Map<String, AttributeValue> item = dynamoUtils.getItemFromDynamo(imageId);
             s3Utils.validateOwnership(item, userId);

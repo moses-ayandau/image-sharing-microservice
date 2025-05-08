@@ -1,6 +1,8 @@
 package com.utils;
 
 import com.factories.AwsFactory;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.*;
 
@@ -8,8 +10,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class DynamoDBUtils {
-    private static final String TABLE_NAME = System.getenv("TABLE_NAME");
 
+    private static final Log log = LogFactory.getLog(DynamoDBUtils.class);
     private final DynamoDbClient dynamoDbClient;
 
     public DynamoDBUtils() {
@@ -17,13 +19,17 @@ public class DynamoDBUtils {
     }
 
 
-    public Map<String, AttributeValue> getItemFromDynamo(String imageId) {
+
+    public Map<String, AttributeValue> getItemFromDynamo(String tableName, String imageId) {
+        log.info(tableName);
         GetItemRequest request = GetItemRequest.builder()
-                .tableName(TABLE_NAME)
-                .key(Map.of("ImageId", AttributeValue.fromS(imageId)))
+                .tableName(tableName)
+                .key(Map.of("imageId", AttributeValue.fromS(imageId)))
                 .build();
 
+        log.info(request);
         GetItemResponse response = dynamoDbClient.getItem(request);
+        log.info(response);
         if (response.item().isEmpty()) {
             throw new RuntimeException("Image not found in database");
         }
@@ -31,25 +37,49 @@ public class DynamoDBUtils {
     }
 
 
-    public void deleteRecordFromDynamo(String imageId) {
+    public void deleteRecordFromDynamo(String tableName, String imageId) {
         DeleteItemRequest request = DeleteItemRequest.builder()
-                .tableName(TABLE_NAME)
-                .key(Map.of("ImageId", AttributeValue.fromS(imageId)))
+                .tableName(tableName)
+                .key(Map.of("imageId", AttributeValue.fromS(imageId)))
                 .build();
 
         dynamoDbClient.deleteItem(request);
     }
 
-    public void updateImageStatus(String imageId) {
+    public void updateImageStatus(String tableName, String imageId, String status) {
         Map<String, AttributeValue> values = new HashMap<>();
-        values.put(":status", AttributeValue.fromS("deleted"));
+        values.put(":status", AttributeValue.fromS(status));
 
         UpdateItemRequest request = UpdateItemRequest.builder()
-                .tableName(TABLE_NAME)
-                .key(Map.of("ImageId", AttributeValue.fromS(imageId)))
+                .tableName(tableName)
+                .key(Map.of("imageId", AttributeValue.fromS(imageId)))
                 .updateExpression("SET #status = :status")
-                .expressionAttributeNames(Map.of("#status", "Status"))
+                .expressionAttributeNames(Map.of("#status", "status"))
                 .expressionAttributeValues(values)
+                .build();
+
+        dynamoDbClient.updateItem(request);
+    }
+
+    public void updateS3Key(String tableName, String imageId, String newS3Key) {
+        Map<String, AttributeValue> key = Map.of(
+                "imageId", AttributeValue.fromS(imageId)
+        );
+
+        Map<String, AttributeValue> expressionAttributeValues = Map.of(
+                ":newS3Key", AttributeValue.fromS(newS3Key)
+        );
+
+        Map<String, String> expressionAttributeNames = Map.of(
+                "#s3Key", "S3Key"
+        );
+
+        UpdateItemRequest request = UpdateItemRequest.builder()
+                .tableName(tableName)
+                .key(key)
+                .updateExpression("SET #s3Key = :newS3Key")
+                .expressionAttributeNames(expressionAttributeNames)
+                .expressionAttributeValues(expressionAttributeValues)
                 .build();
 
         dynamoDbClient.updateItem(request);

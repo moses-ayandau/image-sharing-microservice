@@ -7,12 +7,16 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import com.utils.DynamoDBUtils;
 import com.utils.ResponseUtils;
 import com.utils.S3Utils;
+
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
 import java.util.Map;
 
+@Slf4j
 public class PermanentlyDeleteImageHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
-
+    private final String TABLE_NAME = System.getenv("IMAGE_TABLE");
+    private final String RECYCLE_BUCKET = System.getenv("RECYCLE_BUCKET");
     private final S3Utils s3Utils = new S3Utils();
     private final DynamoDBUtils dynamoUtils = new DynamoDBUtils();
 
@@ -26,6 +30,7 @@ public class PermanentlyDeleteImageHandler implements RequestHandler<APIGatewayP
             String imageId = input.getPathParameters().get("imageId");
             String ownerId = input.getQueryStringParameters().get("ownerId");
 
+            log.info("Owner and ImageId {}, {} ", ownerId, imageId);
             // Validate actual parameter values
             if (imageId == null || imageId.trim().isEmpty()) {
                 return ResponseUtils.errorResponse(400, "Missing or empty 'imageId'");
@@ -35,12 +40,13 @@ public class PermanentlyDeleteImageHandler implements RequestHandler<APIGatewayP
                 return ResponseUtils.errorResponse(400, "Missing or empty 'ownerId'");
             }
 
-            Map<String, AttributeValue> item = dynamoUtils.getItemFromDynamo(imageId);
+            Map<String, AttributeValue> item = dynamoUtils.getItemFromDynamo(TABLE_NAME, imageId);
             s3Utils.validateOwnership(item, ownerId);
 
+            log.info(item.toString());
             String key = item.get("S3Key").s();
-            s3Utils.deleteObject(key);
-            dynamoUtils.deleteRecordFromDynamo(imageId);
+            s3Utils.deleteObject(RECYCLE_BUCKET, key);
+            dynamoUtils.deleteRecordFromDynamo(TABLE_NAME, imageId);
 
             return ResponseUtils.successResponse(200, "Image permanently deleted");
 

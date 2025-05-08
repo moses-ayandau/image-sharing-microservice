@@ -57,10 +57,21 @@ Resources:
         IgnorePublicAcls: true
         BlockPublicPolicy: true
         RestrictPublicBuckets: true
+
+  # 🔹 S3 Bucket for Storing Images
+  RecycleBinImageBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "recycled-bucket-${AWS::AccountId}-${AWS::Region}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
       LifecycleConfiguration:
         Rules:
           - Id: AutoDeleteDeletedImages
-            Prefix: deleted/
+            Prefix: recycle/
             Status: Enabled
             ExpirationInDays: 30
 
@@ -70,14 +81,14 @@ Resources:
     Properties:
       TableName: ImageMetadata
       AttributeDefinitions:
-        - AttributeName: ImageId
+        - AttributeName: imageId
           AttributeType: S
         - AttributeName: userId
           AttributeType: S
-        - AttributeName: Status
+        - AttributeName: status
           AttributeType: S
       KeySchema:
-        - AttributeName: ImageId
+        - AttributeName: imageId
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
       GlobalSecondaryIndexes:
@@ -85,7 +96,7 @@ Resources:
           KeySchema:
             - AttributeName: userId
               KeyType: HASH
-            - AttributeName: Status
+            - AttributeName: status
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
@@ -108,11 +119,13 @@ Resources:
             TableName: !Ref ImageMetadataTable
         - S3CrudPolicy:
             BucketName: !Ref ProcessedImageBucket
+        - S3CrudPolicy:
+            BucketName: !Ref RecycleBinImageBucket
       Environment:
         Variables:
-          BUCKET_NAME: !Ref ProcessedImageBucket
+          PRIMARY_BUCKET: !Ref ProcessedImageBucket
           IMAGE_TABLE: !Ref ImageMetadataTable
-      # Remove the API Event here since we're using OpenAPI definition
+          RECYCLE_BUCKET: !Ref RecycleBinImageBucket
 
   # 🔹 Lambda Function: Restore Image from Recycle Bin
   RecoverImageFunction:
@@ -129,10 +142,13 @@ Resources:
             TableName: !Ref ImageMetadataTable
         - S3CrudPolicy:
             BucketName: !Ref ProcessedImageBucket
+        - S3CrudPolicy:
+            BucketName: !Ref RecycleBinImageBucket
       Environment:
         Variables:
-          BUCKET_NAME: !Ref ProcessedImageBucket
+          PRIMARY_BUCKET: !Ref ProcessedImageBucket
           IMAGE_TABLE: !Ref ImageMetadataTable
+          RECYCLE_BUCKET: !Ref RecycleBinImageBucket
       # Remove the API Event here since we're using OpenAPI definition
 
   # 🔹 Lambda Function: Permanent Deletion
@@ -150,10 +166,12 @@ Resources:
             TableName: !Ref ImageMetadataTable
         - S3CrudPolicy:
             BucketName: !Ref ProcessedImageBucket
+        - S3CrudPolicy:
+            BucketName: !Ref RecycleBinImageBucket
       Environment:
         Variables:
-          BUCKET_NAME: !Ref ProcessedImageBucket
           IMAGE_TABLE: !Ref ImageMetadataTable
+          RECYCLE_BUCKET: !Ref RecycleBinImageBucket
       # Remove the API Event here since we're using OpenAPI definition
 
   # Lambda permissions for API Gateway

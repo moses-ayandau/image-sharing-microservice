@@ -16,6 +16,9 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import java.util.Map;
 
 public class RecoverImageHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
+    private final String TABLE_NAME = System.getenv("IMAGE_TABLE");
+    private final String PRIMARY_BUCKET = System.getenv("PRIMARY_BUCKET");
+    private final String RECYCLE_BUCKET = System.getenv("RECYCLE_BUCKET");
     private static final Log log = LogFactory.getLog(RecoverImageHandler.class);
     private static final ObjectMapper mapper = new ObjectMapper();
 
@@ -41,19 +44,17 @@ public class RecoverImageHandler implements RequestHandler<APIGatewayProxyReques
                 return ResponseUtils.errorResponse(400, "Missing imageId");
             }
 
-            String originalKey = "images/" + userId + "/" + imageId;
-            String recycleKey = userId + "/" + imageId;
-            // Fetch metadata and validate user ownership
-            Map<String, AttributeValue> item = dynamoUtils.getItemFromDynamo(imageId);
+            String originalKey = "main/" + userId + "/" + imageId;
+            String recycleKey = "deleted/" + userId + "/" + imageId;
+
+            Map<String, AttributeValue> item = dynamoUtils.getItemFromDynamo(TABLE_NAME, imageId);
             s3Utils.validateOwnership(item, userId);
 
-            // Recover image: move from recycle location to main
-            s3Utils.copyObject(recycleKey, originalKey);
-            s3Utils.deleteObject(recycleKey);
+            s3Utils.copyObject(RECYCLE_BUCKET, PRIMARY_BUCKET, recycleKey, originalKey);
+            s3Utils.deleteObject(RECYCLE_BUCKET, recycleKey);
 
-            // Update DynamoDB status to active
-            dynamoUtils.updateImageStatus(imageId); // you may want to parameterize this with "active"
-
+            dynamoUtils.updateImageStatus(TABLE_NAME, imageId, "active");
+            dynamoUtils.updateS3Key(TABLE_NAME, imageId, originalKey);
             return ResponseUtils.successResponse(200, Map.of("message", "Image recovered: " + imageId));
         } catch (Exception e) {
             log.error("Failed to recover image: " + e.getMessage(), e);

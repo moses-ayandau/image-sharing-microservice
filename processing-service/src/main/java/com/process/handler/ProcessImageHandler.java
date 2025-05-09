@@ -8,7 +8,7 @@ import com.process.util.EmailService;
 import com.process.util.ImageProcessor;
 import com.process.util.S3Service;
 
-public class RetryProcessorHandler implements RequestHandler<SQSEvent, String> {
+public class ProcessImageHandler implements RequestHandler<SQSEvent, String> {
 
     private final S3Service s3Service;
     private final DynamoDbService dynamoDbService;
@@ -16,7 +16,7 @@ public class RetryProcessorHandler implements RequestHandler<SQSEvent, String> {
     private final ImageProcessor imageProcessor;
     private final String stagingBucket;
 
-    public RetryProcessorHandler() {
+    public ProcessImageHandler() {
         String region = System.getenv("AWS_REGION");
         this.stagingBucket = System.getenv("STAGING_BUCKET");
         String processedBucket = System.getenv("PROCESSED_BUCKET");

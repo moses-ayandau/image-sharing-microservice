@@ -82,7 +82,7 @@ public class ComponentHealthCheckHandler implements RequestHandler<APIGatewayPro
             }
 
             return new APIGatewayProxyResponseEvent()
-                    .withStatusCode(200)
+                    .withStatusCode(500)
                     .withHeaders(headers)
                     .withBody(responseBody)
                     .withIsBase64Encoded(false);

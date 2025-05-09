@@ -180,40 +180,7 @@ Resources:
             Path: /health
             Method: GET
 
-  # Test function that generates failures for health check testing
-  HealthFailFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: com.handlers.healthCheck.HealthFailHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 30
-      CodeUri: healthcheck-service/
-      Events:
-        FailEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref PhotoApi
-            Path: /fail
-            Method: GET
-
-  # Test function that generates HTTP errors for alarm testing
-  ErrorTestFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: com.handlers.healthCheck.ErrorTestHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 30
-      CodeUri: healthcheck-service/
-      Events:
-        TestEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref PhotoApi
-            Path: /test-error
-            Method: GET
-
+  
   # Route 53 Health Check with enhanced configuration
   ApiHealthCheck:
     Type: AWS::Route53::HealthCheck
@@ -393,126 +360,126 @@ Resources:
         - DomainName: !Ref DomainName
           HostedZoneId: !Ref HostedZoneId
 
-  # Cognito Health Check Lambda Function
-  CognitoHealthCheckFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: com.handlers.healthCheck.CognitoHealthCheckHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 30
-      CodeUri: healthcheck-service/
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - cognito-idp:ListUserPools
-                - cognito-idp:DescribeUserPool
-              Resource: '*'
-            - Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-              Resource: '*'
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref PhotoApi
-            Path: /cognito-health
-            Method: GET
+  # # Cognito Health Check Lambda Function
+  # CognitoHealthCheckFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     Handler: com.handlers.healthCheck.CognitoHealthCheckHandler::handleRequest
+  #     Runtime: java21
+  #     MemorySize: 512
+  #     Timeout: 30
+  #     CodeUri: healthcheck-service/
+  #     Policies:
+  #       - Version: '2012-10-17'
+  #         Statement:
+  #           - Effect: Allow
+  #             Action:
+  #               - cognito-idp:ListUserPools
+  #               - cognito-idp:DescribeUserPool
+  #             Resource: '*'
+  #           - Effect: Allow
+  #             Action:
+  #               - logs:CreateLogGroup
+  #               - logs:CreateLogStream
+  #               - logs:PutLogEvents
+  #             Resource: '*'
+  #     Events:
+  #       ApiEvent:
+  #         Type: Api
+  #         Properties:
+  #           RestApiId: !Ref PhotoApi
+  #           Path: /cognito-health
+  #           Method: GET
 
-  # S3 Health Check Lambda Function
-  S3HealthCheckFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: com.handlers.healthCheck.S3HealthCheckHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 30
-      CodeUri: healthcheck-service/
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - s3:ListBuckets
-                - s3:ListAllMyBuckets
-                - s3:GetBucketLocation
-                - s3:HeadBucket
-              Resource: '*'
-            - Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-              Resource: '*'
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref PhotoApi
-            Path: /s3-health
-            Method: GET
+  # # S3 Health Check Lambda Function
+  # S3HealthCheckFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     Handler: com.handlers.healthCheck.S3HealthCheckHandler::handleRequest
+  #     Runtime: java21
+  #     MemorySize: 512
+  #     Timeout: 30
+  #     CodeUri: healthcheck-service/
+  #     Policies:
+  #       - Version: '2012-10-17'
+  #         Statement:
+  #           - Effect: Allow
+  #             Action:
+  #               - s3:ListBuckets
+  #               - s3:ListAllMyBuckets
+  #               - s3:GetBucketLocation
+  #               - s3:HeadBucket
+  #             Resource: '*'
+  #           - Effect: Allow
+  #             Action:
+  #               - logs:CreateLogGroup
+  #               - logs:CreateLogStream
+  #               - logs:PutLogEvents
+  #             Resource: '*'
+  #     Events:
+  #       ApiEvent:
+  #         Type: Api
+  #         Properties:
+  #           RestApiId: !Ref PhotoApi
+  #           Path: /s3-health
+  #           Method: GET 
 
-  # DynamoDB Health Check Lambda Function
-  DynamoDBHealthCheckFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: com.handlers.healthCheck..DynamoDBHealthCheckHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 30
-      CodeUri: healthcheck-service/
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - dynamodb:ListTables
-                - dynamodb:DescribeTable
-              Resource: '*'
-            - Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-              Resource: '*'
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref PhotoApi
-            Path: /dynamodb-health
-            Method: GET
+  # # DynamoDB Health Check Lambda Function
+  # DynamoDBHealthCheckFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     Handler: com.handlers.healthCheck.DynamoDBHealthCheckHandler::handleRequest
+  #     Runtime: java21
+  #     MemorySize: 512
+  #     Timeout: 30
+  #     CodeUri: healthcheck-service/
+  #     Policies:
+  #       - Version: '2012-10-17'
+  #         Statement:
+  #           - Effect: Allow
+  #             Action:
+  #               - dynamodb:ListTables
+  #               - dynamodb:DescribeTable
+  #             Resource: '*'
+  #           - Effect: Allow
+  #             Action:
+  #               - logs:CreateLogGroup
+  #               - logs:CreateLogStream
+  #               - logs:PutLogEvents
+  #             Resource: '*'
+  #     Events:
+  #       ApiEvent:
+  #         Type: Api
+  #         Properties:
+  #           RestApiId: !Ref PhotoApi
+  #           Path: /dynamodb-health
+  #           Method: GET
 
-  # Alert Handler Lambda Function
-  AlertHandlerFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: com.handlers.healthCheck.OutageNotifierHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 30
-      CodeUri: healthcheck-service/
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - sns:Publish
-              Resource: !Ref HealthAlertTopic
-      Environment:
-        Variables:
-          SNS_TOPIC_ARN: !Ref HealthAlertTopic
-          ENVIRONMENT: !Ref Environment
-      Events:
-        AlertEvent:
-          Type: SNS
-          Properties:
-            Topic: !Ref HealthAlertTopic
+  # # Alert Handler Lambda Function
+  # AlertHandlerFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     Handler: com.handlers.healthCheck.OutageNotifierHandler::handleRequest
+  #     Runtime: java21
+  #     MemorySize: 512
+  #     Timeout: 30
+  #     CodeUri: healthcheck-service/
+  #     Policies:
+  #       - Version: '2012-10-17'
+  #         Statement:
+  #           - Effect: Allow
+  #             Action:
+  #               - sns:Publish
+  #             Resource: !Ref HealthAlertTopic
+  #     Environment:
+  #       Variables:
+  #         SNS_TOPIC_ARN: !Ref HealthAlertTopic
+  #         ENVIRONMENT: !Ref Environment
+  #     Events:
+  #       AlertEvent:
+  #         Type: SNS
+  #         Properties:
+  #           Topic: !Ref HealthAlertTopic
 
   # Component Health Check Lambda Function
   ComponentHealthCheckFunction:

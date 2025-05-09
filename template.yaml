@@ -1,25 +1,32 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: >
-  photo-processing-blog
-
-  Sample SAM Template for photo-processing-blog
+Description: Integrated Image Processing System with Upload, Processing, Recycling, Authentication, and Health Monitoring
 
 # Parameter section
 Parameters:
   Environment:
     Type: String
     Default: dev
-    Description: Environment name (dev, test, prod)
+    Description: Environment name
     AllowedValues:
       - dev
       - test
       - prod
 
-  CognitoUserPoolId:
+  ImageTableName:
     Type: String
-    Description: ID of the Cognito User Pool
+    Default: photo
+    Description: Name of the DynamoDB table for storing image metadata
 
+  RetryQueueName:
+    Type: String
+    Default: image-retry-queue
+    Description: Name of the SQS queue for retry processing
+
+  EmailDomain:
+    Type: String
+    Default: mscv2group2.link
+    Description: Verified email domain for sending notifications
 
   AdminEmail:
     Type: String
@@ -60,40 +67,20 @@ Parameters:
     Default: Z07888711CCI43RK69LKQ
     Description: Route 53 Hosted Zone ID
 
-# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
-    Timeout: 20
-    MemorySize: 512
+    Timeout: 30
     Runtime: java21
+    MemorySize: 512
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        JAVA_TOOL_OPTIONS: -XX:+TieredCompilation -XX:TieredStopAtLevel=1
     LoggingConfig:
       LogFormat: JSON
 
 Resources:
-#  # API Gateway
-#  ApiGateway:
-#    Type: AWS::Serverless::Api
-#    Properties:
-#      StageName: !Ref Environment
-#      BinaryMediaTypes:
-#        - image/jpeg
-#        - image/png
-#        - image/gif
-#        - multipart/form-data
-#      Cors:
-#        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-#        AllowHeaders: "'Content-Type,Authorization'"
-#        AllowOrigin: "'https://mscv2group1.link'"
-#        MaxAge: "'3600'"
-#      Auth:
-#        DefaultAuthorizer: CognitoAuthorizer
-#        Authorizers:
-#          CognitoAuthorizer:
-#            UserPoolArn: !GetAtt CognitoUserPool.Arn
-#        AddDefaultAuthorizerToCorsPreflight: false
-#      Tags:
-#        Environment: !Ref Environment
-
   # API Gateway CloudWatch Role
   ApiGatewayCloudWatchRole:
     Type: AWS::IAM::Role
@@ -116,10 +103,11 @@ Resources:
       CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchRole.Arn
     DependsOn: ApiGatewayCloudWatchRole
 
-  # API Gateway for our application
-  PhotoApi:
+  # Main API Gateway for the entire application
+  ApiGateway:
     Type: AWS::Serverless::Api
     Properties:
+      Name: !Sub "image-processing-api-${Environment}"
       StageName: Prod
       EndpointConfiguration:
         Type: REGIONAL
@@ -128,92 +116,282 @@ Resources:
         CertificateArn: !Ref APICertificate
         Route53:
           HostedZoneId: !Ref HostedZoneId
-      # Enable detailed CloudWatch metrics for API Gateway
+      BinaryMediaTypes:
+        - image/jpeg
+        - image/png
+        - image/gif
+        - multipart/form-data
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: "'*'"
+        MaxAge: "'3600'"
       MethodSettings:
         - ResourcePath: "/*"
           HttpMethod: "*"
           MetricsEnabled: true
           DataTraceEnabled: true
           LoggingLevel: INFO
+      Tags:
+        Environment: !Ref Environment
+      DefinitionBody:
+        swagger: '2.0'
+        info:
+          title: !Ref 'AWS::StackName'
+        paths:
+          /upload:
+            post:
+              x-amazon-apigateway-integration:
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UploadImageFunction.Arn}/invocations"
+                httpMethod: POST
+                type: aws_proxy
+          /images/{photoId}/delete:
+            post:
+              x-amazon-apigateway-integration:
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteImageFunction.Arn}/invocations"
+                httpMethod: POST
+                type: aws_proxy
+          /images/{photoId}/restore:
+            post:
+              x-amazon-apigateway-integration:
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RecoverImageFunction.Arn}/invocations"
+                httpMethod: POST
+                type: aws_proxy
+          /images/{photoId}/permanent-delete:
+            delete:
+              x-amazon-apigateway-integration:
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PermanentlyDeleteImageFunction.Arn}/invocations"
+                httpMethod: POST
+                type: aws_proxy
+          /health:
+            get:
+              x-amazon-apigateway-integration:
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HealthCheckFunction.Arn}/invocations"
+                httpMethod: POST
+                type: aws_proxy
+          /health/component/{component}:
+            get:
+              x-amazon-apigateway-integration:
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ComponentHealthCheckFunction.Arn}/invocations"
+                httpMethod: POST
+                type: aws_proxy
+          /images/{userId}/active:
+            get:
+              x-amazon-apigateway-integration:
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetActiveImagesFunction.Arn}/invocations"
+                httpMethod: POST
+                type: aws_proxy
+          /images/{userId}/deleted:
+            get:
+              x-amazon-apigateway-integration:
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetDeletedImagesFunction.Arn}/invocations"
+                httpMethod: POST
+                type: aws_proxy
+          /images/share:
+            post:
+              x-amazon-apigateway-integration:
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ShareImageFunction.Arn}/invocations"
+                httpMethod: POST
+                type: aws_proxy
     DependsOn: ApiGatewayAccount
 
-  # Health Check Lambda Function with expanded S3 permissions
-  HealthCheckFunction:
-    Type: AWS::Serverless::Function
+  # SSL Certificate for domain
+  APICertificate:
+    Type: AWS::CertificateManager::Certificate
     Properties:
-      Handler: com.handlers.healthCheck.HealthCheckHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 30
-      CodeUri: healthcheck-service/
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - dynamodb:ListTables
-                - dynamodb:DescribeTable
-              Resource: '*'
-            # Expanded S3 permissions
-            - Effect: Allow
-              Action:
-                - s3:ListBuckets
-                - s3:ListAllMyBuckets
-                - s3:GetBucketLocation
-                - s3:HeadBucket
-              Resource: '*'
-            - Effect: Allow
-              Action:
-                - cognito-idp:ListUserPools
-              Resource: '*'
-            - Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-              Resource: '*'
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref PhotoApi
-            Path: /health
-            Method: GET
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
 
-  
-  # Route 53 Health Check with enhanced configuration
-  ApiHealthCheck:
-    Type: AWS::Route53::HealthCheck
+  # ===== S3 Buckets =====
+  StagingBucket:
+    Type: AWS::S3::Bucket
     Properties:
-      HealthCheckConfig:
-        Port: 443
-        Type: HTTPS
-        ResourcePath: !Ref HealthCheckPath
-        FullyQualifiedDomainName: !Ref DomainName
-        RequestInterval: !Ref HealthCheckInterval
-        FailureThreshold: !Ref HealthCheckFailureThreshold
-        MeasureLatency: true
-        Inverted: false  # Set to true to invert the health check result
-        EnableSNI: true  # Enable Server Name Indication for HTTPS checks
-        Regions: # Check from multiple regions for better reliability
-          - us-east-1
-          - us-west-1
-          - eu-west-1
-      HealthCheckTags:
-        - Key: Name
-          Value: !Sub '${DomainName}-health-check'
-        - Key: Environment
-          Value: Production
-        - Key: Service
-          Value: PhotoAPI
-  # SNS Topic for Health Check Notifications
+      BucketName: !Sub "image-staging-bucket-${Environment}-${AWS::AccountId}"
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+              - DELETE
+              - HEAD
+            AllowedOrigins:
+              - '*'
+            MaxAge: 3600
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteAfter30Days
+            Status: Enabled
+            ExpirationInDays: 30
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+  ProcessedBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "image-processed-bucket-${Environment}-${AWS::AccountId}"
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - HEAD
+            AllowedOrigins:
+              - '*'
+            MaxAge: 3600
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+  RecycleBinBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "image-recycle-bin-${Environment}-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: AutoDeleteAfter30Days
+            Prefix: recycle/
+            Status: Enabled
+            ExpirationInDays: 30
+
+  CognitoBackupBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "photo-blog-cognito-backups-${Environment}"
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldBackups
+            Status: Enabled
+            ExpirationInDays: 90
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+  # ===== DynamoDB Tables =====
+  PhotoTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref ImageTableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: imageUrl
+          AttributeType: S
+        - AttributeName: photoId
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: imageUrl
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: ImageIdIndex
+          KeySchema:
+            - AttributeName: photoId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: OwnerStatusIndex
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+            - AttributeName: status
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  # ===== SQS Queues =====
+  RetryQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Ref RetryQueueName
+      VisibilityTimeout: 300
+      MessageRetentionPeriod: 345600  # 4 days
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: 5
+
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${RetryQueueName}-dlq"
+      MessageRetentionPeriod: 1209600  # 14 days
+
+  WelcomeEmailDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${AWS::StackName}-WelcomeEmailDLQ"
+
+  # ===== SNS Topics =====
+  PostConfirmationSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${AWS::StackName}-PostConfirmationTopic"
+
+  PostConfirmationSNSPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref PostConfirmationSNSTopic
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cognito-idp.amazonaws.com
+            Action:
+              - sns:Publish
+            Resource: !GetAtt PostConfirmationSNSTopic.TopicArn
+
+  WelcomeEmailLambdaSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: lambda
+      TopicArn: !Ref PostConfirmationSNSTopic
+      Endpoint: !GetAtt WelcomeEmailLambda.Arn
+
+  VerifyEmailLambdaSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: lambda
+      TopicArn: !Ref PostConfirmationSNSTopic
+      Endpoint: !GetAtt VerifyEmailLambda.Arn
+
   HealthAlertTopic:
     Type: AWS::SNS::Topic
     Properties:
       DisplayName: Photo App Health Check Alerts
       TopicName: !Sub ${AWS::StackName}-health-alerts
 
-  # SNS Topic Policy
   HealthAlertTopicPolicy:
     Type: AWS::SNS::TopicPolicy
     Properties:
@@ -228,7 +406,6 @@ Resources:
       Topics:
         - !Ref HealthAlertTopic
 
-  # SNS Email Subscription
   HealthAlertEmailSubscription:
     Type: AWS::SNS::Subscription
     Properties:
@@ -236,361 +413,255 @@ Resources:
       TopicArn: !Ref HealthAlertTopic
       Endpoint: !Ref AdminEmail
 
-  # CloudWatch Alarm for Health Check - FIXED: Using GetAtt instead of Ref
-  HealthCheckAlarm:
-    Type: AWS::CloudWatch::Alarm
+  # ===== Cognito Resources =====
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    DependsOn:
+      - SigninAlertLambda
+      - PostConfirmationLambda
     Properties:
-      AlarmName: !Sub '${DomainName}-health-alarm'
-      AlarmDescription: Alarm when API health check fails
-      MetricName: HealthCheckStatus
-      Namespace: AWS/Route53
-      Statistic: Minimum
-      Period: 60
-      EvaluationPeriods: 1
-      Threshold: 1
-      ComparisonOperator: LessThanThreshold
-      Dimensions:
-        - Name: HealthCheckId
-          Value: !GetAtt ApiHealthCheck.HealthCheckId
-      AlarmActions:
-        - !Ref HealthAlertTopic
-      InsufficientDataActions:
-        - !Ref HealthAlertTopic
-      OKActions:
-        - !Ref HealthAlertTopic  # Also notify when service recovers
+      UserPoolName: !Sub "PhotoBlogUserPool-${Environment}"
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      MfaConfiguration: "OFF"
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          RequireUppercase: true
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Mutable: false
+          Required: true
+        - Name: name
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+      LambdaConfig:
+        PostConfirmation: !GetAtt PostConfirmationLambda.Arn
+        PostAuthentication: !GetAtt SigninAlertLambda.Arn
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Priority: 1
+            Name: verified_email
 
-  # Recovery Alarm for Service Restoration - FIXED: Using GetAtt instead of Ref
-  RecoveryAlarm:
-    Type: AWS::CloudWatch::Alarm
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
     Properties:
-      AlarmName: !Sub '${DomainName}-recovery-alarm'
-      AlarmDescription: Alarm when API health check recovers
-      MetricName: HealthCheckStatus
-      Namespace: AWS/Route53
-      Statistic: Minimum
-      Period: 60
-      EvaluationPeriods: 1
-      Threshold: 1
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      Dimensions:
-        - Name: HealthCheckId
-          Value: !GetAtt ApiHealthCheck.HealthCheckId
-      AlarmActions:
-        - !Ref HealthAlertTopic
+      UserPoolId: !Ref CognitoUserPool
+      ClientName: !Sub "PhotoBlogAppClient-${Environment}"
+      GenerateSecret: false
+      PreventUserExistenceErrors: ENABLED
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+      SupportedIdentityProviders:
+        - COGNITO
+      CallbackURLs:
+        - !Sub "https://${EmailDomain}/auth/callback"
+      LogoutURLs:
+        - !Sub "https://${EmailDomain}/auth/logout"
+      AllowedOAuthFlows:
+        - code
+        - implicit
+      AllowedOAuthScopes:
+        - phone
+        - email
+        - openid
+        - profile
+      AllowedOAuthFlowsUserPoolClient: true
+      ReadAttributes:
+        - email
+        - name
+      WriteAttributes:
+        - email
+        - name
 
-  # CloudWatch Alarm for 5xx Errors
-  ApiGateway5xxErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
+  CognitoDomain:
+    Type: AWS::Cognito::UserPoolDomain
     Properties:
-      AlarmName: !Sub '${DomainName}-5xx-error-alarm'
-      AlarmDescription: !Sub 'Alarm when API Gateway experiences more than ${ErrorThreshold} 5xx errors in ${EvaluationPeriod} minutes'
-      Namespace: AWS/ApiGateway
-      MetricName: 5XXError
-      Dimensions:
-        - Name: ApiName
-          Value: !Ref PhotoApi
-        - Name: Stage
-          Value: Prod
-      Statistic: Sum
-      Period: 60  # 1 minute periods
-      EvaluationPeriods: !Ref EvaluationPeriod  # Number of periods to evaluate
-      Threshold: !Ref ErrorThreshold  # Number of errors to trigger alarm
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      TreatMissingData: notBreaching  # Don't alarm on missing data
-      AlarmActions:
-        - !Ref HealthAlertTopic
-      OKActions:
-        - !Ref HealthAlertTopic  # Notify when errors are resolved
+      Domain: !Sub "photo-blog-auth-${Environment}-${AWS::AccountId}"
+      UserPoolId: !Ref CognitoUserPool
 
-  # CloudWatch Alarm for 4xx Errors (optional but recommended)
-  ApiGateway4xxErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub '${DomainName}-4xx-error-alarm'
-      AlarmDescription: !Sub 'Alarm when API Gateway experiences more than ${ErrorThreshold} 4xx errors in ${EvaluationPeriod} minutes'
-      Namespace: AWS/ApiGateway
-      MetricName: 4XXError
-      Dimensions:
-        - Name: ApiName
-          Value: !Ref PhotoApi
-        - Name: Stage
-          Value: Prod
-      Statistic: Sum
-      Period: 60  # 1 minute periods
-      EvaluationPeriods: !Ref EvaluationPeriod  # Number of periods to evaluate
-      Threshold: !Ref ErrorThreshold  # Number of errors to trigger alarm
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      TreatMissingData: notBreaching  # Don't alarm on missing data
-      AlarmActions:
-        - !Ref HealthAlertTopic
-      OKActions:
-        - !Ref HealthAlertTopic  # Notify when errors are resolved
-
-  # CloudWatch Alarm for API Latency (optional but recommended)
-  ApiGatewayLatencyAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub '${DomainName}-latency-alarm'
-      AlarmDescription: !Sub 'Alarm when API Gateway latency exceeds 1000ms for ${EvaluationPeriod} minutes'
-      Namespace: AWS/ApiGateway
-      MetricName: Latency
-      Dimensions:
-        - Name: ApiName
-          Value: !Ref PhotoApi
-        - Name: Stage
-          Value: Prod
-      Statistic: Average
-      Period: 60  # 1 minute periods
-      EvaluationPeriods: !Ref EvaluationPeriod  # Number of periods to evaluate
-      Threshold: 1000  # 1000ms = 1 second latency threshold
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      TreatMissingData: notBreaching  # Don't alarm on missing data
-      AlarmActions:
-        - !Ref HealthAlertTopic
-      OKActions:
-        - !Ref HealthAlertTopic  # Notify when latency improves
-
-  # SSL Certificate for domain
-  APICertificate:
-    Type: AWS::CertificateManager::Certificate
-    Properties:
-      DomainName: !Ref DomainName
-      ValidationMethod: DNS
-      DomainValidationOptions:
-        - DomainName: !Ref DomainName
-          HostedZoneId: !Ref HostedZoneId
-
-  # # Cognito Health Check Lambda Function
-  # CognitoHealthCheckFunction:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     Handler: com.handlers.healthCheck.CognitoHealthCheckHandler::handleRequest
-  #     Runtime: java21
-  #     MemorySize: 512
-  #     Timeout: 30
-  #     CodeUri: healthcheck-service/
-  #     Policies:
-  #       - Version: '2012-10-17'
-  #         Statement:
-  #           - Effect: Allow
-  #             Action:
-  #               - cognito-idp:ListUserPools
-  #               - cognito-idp:DescribeUserPool
-  #             Resource: '*'
-  #           - Effect: Allow
-  #             Action:
-  #               - logs:CreateLogGroup
-  #               - logs:CreateLogStream
-  #               - logs:PutLogEvents
-  #             Resource: '*'
-  #     Events:
-  #       ApiEvent:
-  #         Type: Api
-  #         Properties:
-  #           RestApiId: !Ref PhotoApi
-  #           Path: /cognito-health
-  #           Method: GET
-
-  # # S3 Health Check Lambda Function
-  # S3HealthCheckFunction:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     Handler: com.handlers.healthCheck.S3HealthCheckHandler::handleRequest
-  #     Runtime: java21
-  #     MemorySize: 512
-  #     Timeout: 30
-  #     CodeUri: healthcheck-service/
-  #     Policies:
-  #       - Version: '2012-10-17'
-  #         Statement:
-  #           - Effect: Allow
-  #             Action:
-  #               - s3:ListBuckets
-  #               - s3:ListAllMyBuckets
-  #               - s3:GetBucketLocation
-  #               - s3:HeadBucket
-  #             Resource: '*'
-  #           - Effect: Allow
-  #             Action:
-  #               - logs:CreateLogGroup
-  #               - logs:CreateLogStream
-  #               - logs:PutLogEvents
-  #             Resource: '*'
-  #     Events:
-  #       ApiEvent:
-  #         Type: Api
-  #         Properties:
-  #           RestApiId: !Ref PhotoApi
-  #           Path: /s3-health
-  #           Method: GET 
-
-  # # DynamoDB Health Check Lambda Function
-  # DynamoDBHealthCheckFunction:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     Handler: com.handlers.healthCheck.DynamoDBHealthCheckHandler::handleRequest
-  #     Runtime: java21
-  #     MemorySize: 512
-  #     Timeout: 30
-  #     CodeUri: healthcheck-service/
-  #     Policies:
-  #       - Version: '2012-10-17'
-  #         Statement:
-  #           - Effect: Allow
-  #             Action:
-  #               - dynamodb:ListTables
-  #               - dynamodb:DescribeTable
-  #             Resource: '*'
-  #           - Effect: Allow
-  #             Action:
-  #               - logs:CreateLogGroup
-  #               - logs:CreateLogStream
-  #               - logs:PutLogEvents
-  #             Resource: '*'
-  #     Events:
-  #       ApiEvent:
-  #         Type: Api
-  #         Properties:
-  #           RestApiId: !Ref PhotoApi
-  #           Path: /dynamodb-health
-  #           Method: GET
-
-  # # Alert Handler Lambda Function
-  # AlertHandlerFunction:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     Handler: com.handlers.healthCheck.OutageNotifierHandler::handleRequest
-  #     Runtime: java21
-  #     MemorySize: 512
-  #     Timeout: 30
-  #     CodeUri: healthcheck-service/
-  #     Policies:
-  #       - Version: '2012-10-17'
-  #         Statement:
-  #           - Effect: Allow
-  #             Action:
-  #               - sns:Publish
-  #             Resource: !Ref HealthAlertTopic
-  #     Environment:
-  #       Variables:
-  #         SNS_TOPIC_ARN: !Ref HealthAlertTopic
-  #         ENVIRONMENT: !Ref Environment
-  #     Events:
-  #       AlertEvent:
-  #         Type: SNS
-  #         Properties:
-  #           Topic: !Ref HealthAlertTopic
-
-  # Component Health Check Lambda Function
-  ComponentHealthCheckFunction:
+  # ===== Lambda Functions: Upload and Processing =====
+  UploadImageFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: com.handlers.healthCheck.ComponentHealthCheckHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 30
-      CodeUri: healthcheck-service/
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - dynamodb:ListTables
-                - dynamodb:DescribeTable
-              Resource: '*'
-            - Effect: Allow
-              Action:
-                - s3:ListBuckets
-                - s3:ListAllMyBuckets
-                - s3:GetBucketLocation
-                - s3:HeadBucket
-              Resource: '*'
-            - Effect: Allow
-              Action:
-                - cognito-idp:ListUserPools
-              Resource: '*'
-            - Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-              Resource: '*'
+      FunctionName: !Sub "image-upload-function-${Environment}"
+      CodeUri: processing-service
+      Handler: com.process.handler.UploadHandler::handleRequest
+      Description: Handles image uploads via API Gateway
+      Environment:
+        Variables:
+          STAGING_BUCKET: !Ref StagingBucket
+          RETRY_QUEUE: !Ref RetryQueueName
+          ENVIRONMENT: !Ref Environment
+      Role: !GetAtt UploadFunctionRole.Arn
       Events:
         ApiEvent:
           Type: Api
           Properties:
-            RestApiId: !Ref PhotoApi
-            Path: /health/component/{component}
-            Method: GET
+            RestApiId: !Ref ApiGateway
+            Path: /upload
+            Method: post
 
-  # CloudWatch Alarms for Route 53 Health Checks
-  Route53HealthCheckAlarm:
-    Type: AWS::CloudWatch::Alarm
+  ProcessImageFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      AlarmName: !Sub ${AWS::StackName}-route53-health-check-alarm
-      AlarmDescription: !Sub "Alarm when Route 53 health check fails for ${DomainName}"
-      MetricName: HealthCheckStatus
-      Namespace: AWS/Route53
-      Statistic: Minimum
-      Period: 60
-      EvaluationPeriods: 1
-      Threshold: 1
-      ComparisonOperator: LessThanThreshold
-      Dimensions:
-        - Name: HealthCheckId
-          Value: !GetAtt ApiHealthCheck.HealthCheckId
-      AlarmActions:
-        - !Ref HealthAlertTopic
-      OKActions:
-        - !Ref HealthAlertTopic
+      FunctionName: !Sub "image-processing-function-${Environment}"
+      CodeUri: processing-service
+      Handler: com.process.handler.ProcessImageHandler::handleRequest
+      Description: Processes images from the retry queue
+      Environment:
+        Variables:
+          STAGING_BUCKET: !Ref StagingBucket
+          PROCESSED_BUCKET: !Ref ProcessedBucket
+          IMAGE_TABLE: !Ref ImageTableName
+          ENVIRONMENT: !Ref Environment
+      Role: !GetAtt ProcessFunctionRole.Arn
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt RetryQueue.Arn
+            BatchSize: 10
 
-  # CloudWatch Alarm for Component Health Checks
-  ComponentHealthCheckAlarm:
-    Type: AWS::CloudWatch::Alarm
+  # ===== Lambda Functions: Image Sharing =====
+  GetActiveImagesFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      AlarmName: !Sub ${AWS::StackName}-component-health-check-alarm
-      AlarmDescription: "Alarm when component health checks fail"
-      MetricName: ComponentHealthCheckStatus
-      Namespace: Custom/PhotoApp
-      Statistic: Minimum
-      Period: 60
-      EvaluationPeriods: 1
-      Threshold: 1
-      ComparisonOperator: LessThanThreshold
-      AlarmActions:
-        - !Ref HealthAlertTopic
-      OKActions:
-        - !Ref HealthAlertTopic
+      FunctionName: !Sub "${Environment}-get-active-images"
+      Handler: handler.GetActiveImagesHandler::handleRequest
+      CodeUri: listing-service/
+      Environment:
+        Variables:
+          IMAGE_TABLE: !Ref ImageTableName
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref PhotoTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /images/{userId}/active
+            Method: get
+      Tags:
+        Environment: !Ref Environment
 
-  # Route 53 Health Check for Cognito
-  CognitoHealthCheck:
-    Type: AWS::Route53::HealthCheck
+  GetDeletedImagesFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      HealthCheckConfig:
-        Port: 443
-        Type: HTTPS
-        ResourcePath: /health/component/cognito
-        FullyQualifiedDomainName: !Ref DomainName
-        RequestInterval: 30
-        FailureThreshold: 3
-        MeasureLatency: true
-        EnableSNI: true
-        Regions:
-          - us-east-1
-          - us-west-1
-          - eu-west-1
-      HealthCheckTags:
-        - Key: Name
-          Value: !Sub '${DomainName}-cognito-health-check'
-        - Key: Environment
-          Value: Production
-        - Key: Service
-          Value: Cognito
+      FunctionName: !Sub "${Environment}-get-deleted-images"
+      Handler: handler.GetDeletedImagesHandler::handleRequest
+      CodeUri: listing-service/
+      Environment:
+        Variables:
+          IMAGE_TABLE: !Ref ImageTableName
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref PhotoTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /images/{userId}/deleted
+            Method: get
+      Tags:
+        Environment: !Ref Environment
 
-  # Route 53 Health Check for S3
-  S3HealthCheck:
-    Type: AWS::Route53::HealthCheck
+  ShareImageFunction:
+    Type: AWS::Serverless::Function
     Properties:
+      FunctionName: !Sub "${Environment}-share-image"
+      Handler: handler.ShareImageHandler::handleRequest
+      CodeUri: listing-service/
+      Environment:
+        Variables:
+          PROCESSED_BUCKET: !Ref ProcessedBucket
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref ProcessedBucket
+        - DynamoDBReadPolicy:
+            TableName: !Ref PhotoTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /images/share
+            Method: post
+      Tags:
+        Environment: !Ref Environment
+
+  # ===== Lambda Functions: Recycle Bin Feature =====
+  DeleteImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "image-delete-function-${Environment}"
+      CodeUri: recycle-service/
+      Handler: com.handlers.DeleteImageHandler::handleRequest
+      Description: Moves images to the recycle bin
+      Environment:
+        Variables:
+          PRIMARY_BUCKET: !Ref ProcessedBucket
+          IMAGE_TABLE: !Ref ImageTableName
+          RECYCLE_BUCKET: !Ref RecycleBinBucket
+          ENVIRONMENT: !Ref Environment
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PhotoTable
+        - S3CrudPolicy:
+            BucketName: !Ref ProcessedBucket
+        - S3CrudPolicy:
+            BucketName: !Ref RecycleBinBucket
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /images/{photoId}/delete
+            Method: post
+
+  RecoverImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "image-recover-function-${Environment}"
+      CodeUri: recycle-service/
+      Handler: com.handlers.RecoverImageHandler::handleRequest
+      Description: Restores images from the recycle bin
+      Environment:
+        Variables:
+          PRIMARY_BUCKET: !Ref ProcessedBucket
+          IMAGE_TABLE: !Ref ImageTableName
+          RECYCLE_BUCKET: !Ref RecycleBinBucket
+          ENVIRONMENT: !Ref Environment
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PhotoTable
+        - S3CrudPolicy:
+            BucketName: !Ref ProcessedBucket
+        - S3CrudPolicy:
+            BucketName: !Ref RecycleBinBucket
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /images/{photoId}/restore
+            Method: post
+
+  PermanentlyDeleteImageFunction:
+    Type: AWS::Serverless::Function
       HealthCheckConfig:
         Port: 443
         Type: HTTPS
@@ -616,6 +687,399 @@ Resources:
   DynamoDBHealthCheck:
     Type: AWS::Route53::HealthCheck
     Properties:
+      FunctionName: !Sub "image-permanent-delete-function-${Environment}"
+      CodeUri: recycle-service/
+      Handler: com.handlers.PermanentlyDeleteImageHandler::handleRequest
+      Description: Permanently deletes images from the recycle bin
+      Environment:
+        Variables:
+          IMAGE_TABLE: !Ref ImageTableName
+          RECYCLE_BUCKET: !Ref RecycleBinBucket
+          ENVIRONMENT: !Ref Environment
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PhotoTable
+        - S3CrudPolicy:
+            BucketName: !Ref RecycleBinBucket
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /images/{photoId}/permanent-delete
+            Method: delete
+
+  # ===== Lambda Functions: Authentication =====
+  PostConfirmationLambda:
+    Type: AWS::Serverless::Function
+    DependsOn: PostConfirmationSNSTopic
+    Properties:
+      FunctionName: !Sub "photo-blog-post-confirmation-${Environment}"
+      Handler: com.amalitechphotoappcognitoauth.handlers.PostConfirmationHandler::handleRequest
+      CodeUri: photo-blog-auth/
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref PostConfirmationSNSTopic
+          ENVIRONMENT: !Ref Environment
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !GetAtt PostConfirmationSNSTopic.TopicArn
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
+
+  WelcomeEmailLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "photo-blog-welcome-email-${Environment}"
+      Handler: com.amalitechphotoappcognitoauth.handlers.WelcomeEmailHandler::handleRequest
+      CodeUri: photo-blog-auth/
+      Timeout: 60
+      ReservedConcurrentExecutions: 10
+      Environment:
+        Variables:
+          EMAIL_SOURCE: !Sub "noreply@${EmailDomain}"
+          ENVIRONMENT: !Ref Environment
+          APP_URL: !Sub "https://${EmailDomain}"
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+                - ses:GetIdentityVerificationAttributes
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt WelcomeEmailDLQ.Arn
+
+  VerifyEmailLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "photo-blog-verify-email-${Environment}"
+      Handler: com.amalitechphotoappcognitoauth.handlers.VerifyEmailHandler::handleRequest
+      CodeUri: photo-blog-auth/
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:VerifyEmailIdentity
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
+
+  SigninAlertLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "photo-blog-signin-alert-${Environment}"
+      Handler: com.amalitechphotoappcognitoauth.handlers.SigninAlertHandler::handleRequest
+      CodeUri: photo-blog-auth/
+      Environment:
+        Variables:
+          EMAIL_SOURCE: !Sub "noreply@${EmailDomain}"
+          ENVIRONMENT: !Ref Environment
+          APP_URL: !Sub "https://${EmailDomain}"
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
+
+  # ===== Lambda Functions: Health Check =====
+  HealthCheckFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: com.handlers.healthCheck.HealthCheckHandler::handleRequest
+      CodeUri: healthcheck-service/
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:ListTables
+                - dynamodb:DescribeTable
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - s3:ListBuckets
+                - s3:ListAllMyBuckets
+                - s3:GetBucketLocation
+                - s3:HeadBucket
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUserPools
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /health
+            Method: get
+
+  ComponentHealthCheckFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: com.handlers.healthCheck.ComponentHealthCheckHandler::handleRequest
+      CodeUri: healthcheck-service/
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:ListTables
+                - dynamodb:DescribeTable
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - s3:ListBuckets
+                - s3:ListAllMyBuckets
+                - s3:GetBucketLocation
+                - s3:HeadBucket
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUserPools
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /health/component/{component}
+            Method: get
+
+  # ===== IAM Roles =====
+  UploadFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3UploadPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+                - Effect: Allow
+                  Action:
+                    - s3:PutObject
+                  Resource: !Sub "arn:aws:s3:::${StagingBucket}/*"
+        - PolicyName: SQSSendPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:GetQueueUrl
+                Resource: !GetAtt RetryQueue.Arn
+
+  ProcessFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole
+      Policies:
+        - PolicyName: S3ProcessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:DeleteObject
+                Resource: !Sub "arn:aws:s3:::${StagingBucket}/*"
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub "arn:aws:s3:::${ProcessedBucket}/*"
+        - PolicyName: DynamoDBPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource: !GetAtt PhotoTable.Arn
+        - PolicyName: SESPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: "*"
+
+  # ===== Lambda Permissions =====
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt PostConfirmationLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt CognitoUserPool.Arn
+
+  WelcomeEmailLambdaPermissionSNS:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt WelcomeEmailLambda.Arn
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref PostConfirmationSNSTopic
+
+  VerifyEmailLambdaPermissionSNS:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt VerifyEmailLambda.Arn
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref PostConfirmationSNSTopic
+
+  LambdaInvokePermissionSignin:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt SigninAlertLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt CognitoUserPool.Arn
+
+  # ===== Route 53 Health Checks =====
+  ApiHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        Port: 443
+        Type: HTTPS
+        ResourcePath: !Ref HealthCheckPath
+        FullyQualifiedDomainName: !Ref DomainName
+        RequestInterval: !Ref HealthCheckInterval
+        FailureThreshold: !Ref HealthCheckFailureThreshold
+        MeasureLatency: true
+        Inverted: false
+        EnableSNI: true
+        Regions:
+          - us-east-1
+          - us-west-1
+          - eu-west-1
+      HealthCheckTags:
+        - Key: Name
+          Value: !Sub '${DomainName}-health-check'
+        - Key: Environment
+          Value: Production
+        - Key: Service
+          Value: PhotoAPI
+
+  CognitoHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        Port: 443
+        Type: HTTPS
+        ResourcePath: /health/component/cognito
+        FullyQualifiedDomainName: !Ref DomainName
+        RequestInterval: 30
+        FailureThreshold: 3
+        MeasureLatency: true
+        EnableSNI: true
+        Regions:
+          - us-east-1
+          - us-west-1
+          - eu-west-1
+      HealthCheckTags:
+        - Key: Name
+          Value: !Sub '${DomainName}-cognito-health-check'
+        - Key: Environment
+          Value: Production
+        - Key: Service
+          Value: Cognito
+
+  S3HealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        Port: 443
+        Type: HTTPS
+        ResourcePath: /health/component/s3
+        FullyQualifiedDomainName: !Ref DomainName
+        RequestInterval: 30
+        FailureThreshold: 3
+        MeasureLatency: true
+        EnableSNI: true
+        Regions:
+          - us-east-1
+          - us-west-1
+          - eu-west-1
+      HealthCheckTags:
+        - Key: Name
+          Value: !Sub '${DomainName}-s3-health-check'
+        - Key: Environment
+          Value: Production
+        - Key: Service
+          Value: S3
+
+  DynamoDBHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
       HealthCheckConfig:
         Port: 443
         Type: HTTPS
@@ -637,7 +1101,153 @@ Resources:
         - Key: Service
           Value: DynamoDB
 
-  # CloudWatch Alarm for Cognito Health Check
+  # ===== CloudWatch Alarms =====
+  HealthCheckAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${DomainName}-health-alarm'
+      AlarmDescription: Alarm when API health check fails
+      MetricName: HealthCheckStatus
+      Namespace: AWS/Route53
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: HealthCheckId
+          Value: !GetAtt ApiHealthCheck.HealthCheckId
+      AlarmActions:
+        - !Ref HealthAlertTopic
+      InsufficientDataActions:
+        - !Ref HealthAlertTopic
+      OKActions:
+        - !Ref HealthAlertTopic
+
+  RecoveryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${DomainName}-recovery-alarm'
+      AlarmDescription: Alarm when API health check recovers
+      MetricName: HealthCheckStatus
+      Namespace: AWS/Route53
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: HealthCheckId
+          Value: !GetAtt ApiHealthCheck.HealthCheckId
+      AlarmActions:
+        - !Ref HealthAlertTopic
+
+  ApiGateway5xxErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${DomainName}-5xx-error-alarm'
+      AlarmDescription: !Sub 'Alarm when API Gateway experiences more than ${ErrorThreshold} 5xx errors in ${EvaluationPeriod} minutes'
+      Namespace: AWS/ApiGateway
+      MetricName: 5XXError
+      Dimensions:
+        - Name: ApiName
+          Value: !Ref ApiGateway
+        - Name: Stage
+          Value: Prod
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriod
+      Threshold: !Ref ErrorThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref HealthAlertTopic
+      OKActions:
+        - !Ref HealthAlertTopic
+
+  ApiGateway4xxErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${DomainName}-4xx-error-alarm'
+      AlarmDescription: !Sub 'Alarm when API Gateway experiences more than ${ErrorThreshold} 4xx errors in ${EvaluationPeriod} minutes'
+      Namespace: AWS/ApiGateway
+      MetricName: 4XXError
+      Dimensions:
+        - Name: ApiName
+          Value: !Ref ApiGateway
+        - Name: Stage
+          Value: Prod
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriod
+      Threshold: !Ref ErrorThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref HealthAlertTopic
+      OKActions:
+        - !Ref HealthAlertTopic
+
+  ApiGatewayLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${DomainName}-latency-alarm'
+      AlarmDescription: !Sub 'Alarm when API Gateway latency exceeds 1000ms for ${EvaluationPeriod} minutes'
+      Namespace: AWS/ApiGateway
+      MetricName: Latency
+      Dimensions:
+        - Name: ApiName
+          Value: !Ref ApiGateway
+        - Name: Stage
+          Value: Prod
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: !Ref EvaluationPeriod
+      Threshold: 1000
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref HealthAlertTopic
+      OKActions:
+        - !Ref HealthAlertTopic
+
+  Route53HealthCheckAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-route53-health-check-alarm
+      AlarmDescription: !Sub "Alarm when Route 53 health check fails for ${DomainName}"
+      MetricName: HealthCheckStatus
+      Namespace: AWS/Route53
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: HealthCheckId
+          Value: !GetAtt ApiHealthCheck.HealthCheckId
+      AlarmActions:
+        - !Ref HealthAlertTopic
+      OKActions:
+        - !Ref HealthAlertTopic
+
+  ComponentHealthCheckAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-component-health-check-alarm
+      AlarmDescription: "Alarm when component health checks fail"
+      MetricName: ComponentHealthCheckStatus
+      Namespace: Custom/PhotoApp
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+        - !Ref HealthAlertTopic
+      OKActions:
+        - !Ref HealthAlertTopic
+
   CognitoHealthCheckAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -658,7 +1268,6 @@ Resources:
       OKActions:
         - !Ref HealthAlertTopic
 
-  # CloudWatch Alarm for S3 Health Check
   S3HealthCheckAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -679,7 +1288,6 @@ Resources:
       OKActions:
         - !Ref HealthAlertTopic
 
-  # CloudWatch Alarm for DynamoDB Health Check
   DynamoDBHealthCheckAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -700,430 +1308,57 @@ Resources:
       OKActions:
         - !Ref HealthAlertTopic
 
-
-
-
-#  # Cognito Resources
-#  CognitoUserPool:
-#    Type: AWS::Cognito::UserPool
-#    Properties:
-#      UserPoolName: !Sub "${Environment}-PhotoBlogUserPool"
-#      Policies:
-#        PasswordPolicy:
-#          MinimumLength: 8
-#          RequireLowercase: true
-#          RequireNumbers: true
-#          RequireSymbols: true
-#          RequireUppercase: true
-#      Schema:
-#        - Name: email
-#          AttributeDataType: String
-#          Mutable: false
-#          Required: true
-#        - Name: username
-#          AttributeDataType: String
-#          Required: false
-#      LambdaConfig:
-#        PostConfirmation: !GetAtt WelcomeEmailLambda.Arn
-#        PostAuthentication: !GetAtt SigninAlertLambda.Arn
-#
-#  CognitoUserPoolClient:
-#    Type: AWS::Cognito::UserPoolClient
-#    Properties:
-#      UserPoolId: !Ref CognitoUserPool
-#      ClientName: !Sub "${Environment}-PhotoBlogAppClient"
-#      GenerateSecret: false
-#      ExplicitAuthFlows:
-#        - ALLOW_USER_PASSWORD_AUTH
-#        - ALLOW_REFRESH_TOKEN_AUTH
-#
-#  # SES Resources
-#  SESDomainIdentity:
-#    Type: AWS::SES::EmailIdentity
-#    Properties:
-#      EmailIdentity: noreply@mscv2group1.link
-#
-#  # S3 Resources
-#  StagingBucket:
-#    Type: AWS::S3::Bucket
-#    DependsOn:
-#      - ProcessImageFunction
-#      - InvokePermission
-#    Properties:
-#      BucketName: !Sub "${Environment}-group2-staging-bucket"
-#      CorsConfiguration:
-#        CorsRules:
-#          - AllowedHeaders: [ '*' ]
-#            AllowedMethods: [ GET, PUT, POST, DELETE, HEAD ]
-#            AllowedOrigins: [ '*' ]
-#            MaxAge: 3000
-#      NotificationConfiguration:
-#        LambdaConfigurations:
-#          - Event: 's3:ObjectCreated:*'
-#            Function: !GetAtt ProcessImageFunction.Arn
-#
-#  ProcessedBucket:
-#    Type: AWS::S3::Bucket
-#    Properties:
-#      BucketName: !Sub "${Environment}-processed-bucket"
-#      PublicAccessBlockConfiguration:
-#        BlockPublicAcls: true
-#        BlockPublicPolicy: true
-#        IgnorePublicAcls: true
-#        RestrictPublicBuckets: true
-#      Tags:
-#        - Key: Environment
-#          Value: !Ref Environment
-#      LifecycleConfiguration:
-#        Rules:
-#          - Id: AutoDeleteDeletedObjects
-#            Prefix: deleted/
-#            Status: Enabled
-#            ExpirationInDays: 7
-#
-#  BackupBucket:
-#    Type: AWS::S3::Bucket
-#    Properties:
-#      BucketName: !Sub "${AWS::StackName}-backup-${Environment}"
-#      VersioningConfiguration:
-#        Status: Enabled
-#      PublicAccessBlockConfiguration:
-#        BlockPublicAcls: true
-#        BlockPublicPolicy: true
-#        IgnorePublicAcls: true
-#        RestrictPublicBuckets: true
-#      Tags:
-#        - Key: Environment
-#          Value: !Ref Environment
-#
-#  # DynamoDB Resources
-#  ImageTable:
-#    Type: AWS::DynamoDB::Table
-#    Properties:
-#      TableName: ImageMetadata
-#      AttributeDefinitions:
-#        - AttributeName: ImageId
-#          AttributeType: S
-#        - AttributeName: OwnerId
-#          AttributeType: S
-#        - AttributeName: Status
-#          AttributeType: S
-#      KeySchema:
-#        - AttributeName: ImageId
-#          KeyType: HASH
-#      BillingMode: PAY_PER_REQUEST
-#      GlobalSecondaryIndexes:
-#        - IndexName: OwnerStatusIndex
-#          KeySchema:
-#            - AttributeName: OwnerId
-#              KeyType: HASH
-#            - AttributeName: Status
-#              KeyType: RANGE
-#          Projection:
-#            ProjectionType: ALL
-#      TimeToLiveSpecification:
-#        AttributeName: DeletedAt
-#        Enabled: true
-#
-#
-#  # SQS Resources
-#  ImageProcessingQueue:
-#    Type: AWS::SQS::Queue
-#    Properties:
-#      QueueName: !Sub "${AWS::StackName}-image-processing-${Environment}"
-#      VisibilityTimeout: 300
-#      RedrivePolicy:
-#        deadLetterTargetArn: !GetAtt ImageProcessingDLQ.Arn
-#        maxReceiveCount: 3
-#      Tags:
-#        - Key: Environment
-#          Value: !Ref Environment
-#
-#  ImageProcessingDLQ:
-#    Type: AWS::SQS::Queue
-#    Properties:
-#      QueueName: !Sub "${AWS::StackName}-image-processing-dlq-${Environment}"
-#      MessageRetentionPeriod: 1209600  # 14 days
-#      Tags:
-#        - Key: Environment
-#          Value: !Ref Environment
-#
-#  RetryQueue:
-#    Type: AWS::SQS::Queue
-#    Properties:
-#      QueueName: !Sub "${Environment}-retry-queue"
-#      DelaySeconds: 300  # 5 minutes delay for retry
-#      MessageRetentionPeriod: 1209600  # 14 days
-#      RedrivePolicy:
-#        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
-#        maxReceiveCount: 3
-#      Tags:
-#        - Key: Environment
-#          Value: !Ref Environment
-#
-#  DeadLetterQueue:
-#    Type: AWS::SQS::Queue
-#    Properties:
-#      QueueName: !Sub "${Environment}-dlq"
-#      MessageRetentionPeriod: 1209600  # 14 days
-#      Tags:
-#        - Key: Environment
-#          Value: !Ref Environment
-#
-#  # Lambda Functions
-#  WelcomeEmailLambda:
-#    Type: AWS::Serverless::Function
-#    Properties:
-#      FunctionName: !Sub "${Environment}-welcome-email"
-#      Handler: com.amalitechphotoappcognitoauth.WelcomeEmailHandler::handleRequest
-#      CodeUri: photo-blog-auth/
-#      Policies:
-#        - AmazonSESFullAccess
-#      Timeout: 30
-#      Tags:
-#        Environment: !Ref Environment
-#
-#  SigninAlertLambda:
-#    Type: AWS::Serverless::Function
-#    Properties:
-#      FunctionName: !Sub "${Environment}-signin-alert"
-#      Handler: com.amalitechphotoappcognitoauth.SigninAlertHandler::handleRequest
-#      CodeUri: photo-blog-auth/
-#      Policies:
-#        - AmazonSESFullAccess
-#      Timeout: 30
-#      Tags:
-#        Environment: !Ref Environment
-#
-#  UploadImageFunction:
-#    Type: AWS::Serverless::Function
-#    Properties:
-#      FunctionName: !Sub "${Environment}-upload-image"
-#      Handler: image-upload.handler.UploadImageHandler
-#      CodeUri: ./
-#      Environment:
-#        Variables:
-#          STAGING_BUCKET: !Ref StagingBucket
-#      Policies:
-#        - S3CrudPolicy:
-#            BucketName: !Ref StagingBucket
-#      Events:
-#        ApiEvent:
-#          Type: Api
-#          Properties:
-#            RestApiId: !Ref ApiGateway
-#            Path: /upload
-#            Method: post
-#      Tags:
-#        Environment: !Ref Environment
-#
-#  ProcessImageFunction:
-#    Type: AWS::Serverless::Function
-#    Properties:
-#      FunctionName: !Sub "${Environment}-process-image"
-#      Handler: image-upload.handler.ProcessImageHandler
-#      CodeUri: ./
-#      Environment:
-#        Variables:
-#          PROCESSED_BUCKET: !Ref ProcessedBucket
-#          IMAGE_TABLE: !Ref ImageTable
-#          RETRY_QUEUE: !Ref RetryQueue
-#      Policies:
-#        - S3ReadPolicy:
-#            BucketName: !Ref StagingBucket
-#        - S3CrudPolicy:
-#            BucketName: !Ref ProcessedBucket
-#        - DynamoDBCrudPolicy:
-#            TableName: !Ref ImageTable
-#        - SQSSendMessagePolicy:
-#            QueueName: !GetAtt RetryQueue.QueueName
-#      Tags:
-#        Environment: !Ref Environment
-#
-#  RetryProcessorFunction:
-#    Type: AWS::Serverless::Function
-#    Properties:
-#      FunctionName: !Sub "${Environment}-retry-processor"
-#      Handler: image-upload.handler.RetryProcessorHandler
-#      CodeUri: ./
-#      Environment:
-#        Variables:
-#          STAGING_BUCKET: !Ref StagingBucket
-#          PROCESSED_BUCKET: !Ref ProcessedBucket
-#          IMAGE_TABLE: !Ref ImageTable
-#          RETRY_QUEUE: !Ref RetryQueue
-#      Policies:
-#        - S3ReadPolicy:
-#            BucketName: !Ref StagingBucket
-#        - S3CrudPolicy:
-#            BucketName: !Ref ProcessedBucket
-#        - DynamoDBCrudPolicy:
-#            TableName: !Ref ImageTable
-#        - SQSPollerPolicy:
-#            QueueName: !GetAtt RetryQueue.QueueName
-#      Events:
-#        SQSEvent:
-#          Type: SQS
-#          Properties:
-#            Queue: !GetAtt RetryQueue.Arn
-#            BatchSize: 1
-#      Tags:
-#        Environment: !Ref Environment
-#
-#  HandleDeleteImageFunction:
-#    Type: AWS::Serverless::Function
-#    Properties:
-#      CodeUri: ./
-#      Handler: com.handler.HandleDeleteImage::handleRequest
-#      MemorySize: 512
-#      Timeout: 10
-#      Policies:
-#        - DynamoDBCrudPolicy:
-#            TableName: !Ref ImageTable
-#        - S3CrudPolicy:
-#            BucketName: !Ref ProcessedBucket
-#      Events:
-#        ApiEvent:
-#          Type: Api
-#          Properties:
-#            Path: /images/{imageId}/delete
-#            Method: POST
-#
-#    # 🔹 Lambda Function: Restore Image from Recycle Bin
-#  RestoreImageFromBinFunction:
-#    Type: AWS::Serverless::Function
-#    Properties:
-#      CodeUri: ./
-#      Handler: com.handler.RestoreImageFromBin::handleRequest
-#      MemorySize: 512
-#      Timeout: 10
-#      Policies:
-#        - DynamoDBCrudPolicy:
-#            TableName: !Ref ImageTable
-#        - S3CrudPolicy:
-#            BucketName: !Ref ProcessedBucket
-#      Events:
-#        ApiEvent:
-#          Type: Api
-#          Properties:
-#            Path: /images/{imageId}/restore
-#            Method: POST
-#
-#    # 🔹 Lambda Function: Permanent Deletion
-#  PermanentlyDeleteImageFunction:
-#    Type: AWS::Serverless::Function
-#    Properties:
-#      CodeUri: ./
-#      Handler: com.handler.PermanentlyDeleteImage::handleRequest
-#      MemorySize: 512
-#      Timeout: 10
-#      Policies:
-#        - DynamoDBCrudPolicy:
-#            TableName: !Ref ImageTable
-#        - S3CrudPolicy:
-#            BucketName: !Ref ProcessedBucket
-#      Events:
-#        ApiEvent:
-#          Type: Api
-#          Properties:
-#            Path: /images/{imageId}/permanent-delete
-#            Method: DELETE
-#
-#  # Lambda Permissions
-#  LambdaInvokePermissionWelcome:
-#    Type: AWS::Lambda::Permission
-#    Properties:
-#      FunctionName: !GetAtt WelcomeEmailLambda.Arn
-#      Action: lambda:InvokeFunction
-#      Principal: cognito-idp.amazonaws.com
-#      SourceArn: !GetAtt CognitoUserPool.Arn
-#
-#  LambdaInvokePermissionSignin:
-#    Type: AWS::Lambda::Permission
-#    Properties:
-#      FunctionName: !GetAtt SigninAlertLambda.Arn
-#      Action: lambda:InvokeFunction
-#      Principal: cognito-idp.amazonaws.com
-#      SourceArn: !GetAtt CognitoUserPool.Arn
-#
-#  InvokePermission:
-#    Type: AWS::Lambda::Permission
-#    Properties:
-#      Action: lambda:InvokeFunction
-#      FunctionName: !Ref ProcessImageFunction
-#      Principal: s3.amazonaws.com
-#      SourceAccount: !Ref AWS::AccountId
-#      SourceArn: !GetAtt StagingBucket.Arn
-
 Outputs:
-#  ApiEndpoint:
-#    Description: API Gateway endpoint URL
-#    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/"
-#
-#  StagingBucketName:
-#    Description: S3 Bucket for staging uploaded images
-#    Value: !Ref StagingBucket
-#
-#  ProcessedBucketName:
-#    Description: S3 Bucket for processed images
-#    Value: !Ref ProcessedBucket
-#
-#  BackupBucketName:
-#    Description: S3 Bucket for image backups
-#    Value: !Ref BackupBucket
-#
-#  ImagesTableName:
-#    Description: DynamoDB table for images metadata
-#    Value: !Ref ImageTable
-#
-#  UserPoolId:
-#    Description: Cognito User Pool ID
-#    Value: !Ref CognitoUserPool
-#
-#  UserPoolClientId:
-#    Description: Cognito User Pool Client ID
-#    Value: !Ref CognitoUserPoolClient
+  ApiEndpoint:
+    Description: "API Gateway endpoint URL for Prod stage"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiEndpoint"
 
-  ApiEndpoint1:
-    Description: API Gateway endpoint URL
-    Value: !Sub 'https://${PhotoApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/'
+  StagingBucketName:
+    Description: "Staging bucket name"
+    Value: !Ref StagingBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-StagingBucketName"
 
-  DomainEndpoint:
-    Description: Custom domain endpoint URL
-    Value: !Sub 'https://${DomainName}/'
+  ProcessedBucketName:
+    Description: "Processed bucket name"
+    Value: !Ref ProcessedBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-ProcessedBucketName"
 
-  HealthCheckId:
-    Description: ID of the Route 53 Health Check
-    Value: !GetAtt ApiHealthCheck.HealthCheckId
+  RecycleBinBucketName:
+    Description: "Recycle bin bucket name"
+    Value: !Ref RecycleBinBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-RecycleBinBucketName"
 
-  HealthCheckEndpoint:
-    Description: Health check endpoint URL
-    Value: !Sub 'https://${DomainName}${HealthCheckPath}'
+  ImageTableName:
+    Description: "DynamoDB table for image metadata"
+    Value: !Ref PhotoTable
+    Export:
+      Name: !Sub "${AWS::StackName}-ImageTableName"
 
-  TestErrorEndpoint:
-    Description: Endpoint to test error generation and alarms
-    Value: !Sub 'https://${DomainName}/Prod/test-error'
+  RetryQueueName:
+    Description: "SQS queue for retry processing"
+    Value: !GetAtt RetryQueue.QueueName
+    Export:
+      Name: !Sub "${AWS::StackName}-RetryQueueName"
 
-  HealthAlertTopicARN:
-    Description: ARN of the SNS Topic for health check notifications
-    Value: !Ref HealthAlertTopic
+  UserPoolId:
+    Description: "ID of the Cognito User Pool"
+    Value: !Ref CognitoUserPool
+    Export:
+      Name: !Sub "${AWS::StackName}-UserPoolId"
 
-  CloudWatchAlarmsURL:
-    Description: URL to view configured CloudWatch alarms
-    Value: !Sub 'https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#alarmsV2:?search=${DomainName}'
+  UserPoolClientId:
+    Description: "ID of the Cognito User Pool Client"
+    Value: !Ref CognitoUserPoolClient
+    Export:
+      Name: !Sub "${AWS::StackName}-UserPoolClientId"
 
-  CloudWatchRoleARN:
-    Description: ARN of the IAM role for API Gateway to write to CloudWatch
-    Value: !GetAtt ApiGatewayCloudWatchRole.Arn
-
-  CognitoHealthEndpoint:
-    Description: Cognito health check endpoint URL
-    Value: !Sub 'https://${DomainName}/Prod/cognito-health'
-
-  S3HealthEndpoint:
-    Description: S3 health check endpoint URL
-    Value: !Sub 'https://${DomainName}/Prod/s3-health'
-
-  DynamoDBHealthEndpoint:
-    Description: DynamoDB health check endpoint URL
-    Value: !Sub 'https://${DomainName}/Prod/dynamodb-health'
+  CognitoDomainName:
+    Description: "Domain name for the Cognito hosted UI"
+    Value: !Sub "https://${CognitoDomain}.auth.${AWS::Region}.amazoncognito.com"
+    Export:
+      Name: !Sub "${AWS::StackName}-CognitoDomainName"

@@ -16,12 +16,13 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import java.util.Map;
 
 public class RecoverImageHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
-    private final String TABLE_NAME = System.getenv("IMAGE_TABLE");
-    private final String PRIMARY_BUCKET = System.getenv("PRIMARY_BUCKET");
-    private final String RECYCLE_BUCKET = System.getenv("RECYCLE_BUCKET");
-    private static final Log log = LogFactory.getLog(RecoverImageHandler.class);
-    private static final ObjectMapper mapper = new ObjectMapper();
+    private final String tableName = System.getenv("IMAGE_TABLE");
+    private final String bucketName = System.getenv("PRIMARY_BUCKET");
 
+    private static final Log log = LogFactory.getLog(RecoverImageHandler.class);
+
+
+    private static final ObjectMapper mapper = new ObjectMapper();
     private final S3Utils s3Utils = new S3Utils();
     private final DynamoDBUtils dynamoUtils = new DynamoDBUtils();
 
@@ -45,16 +46,19 @@ public class RecoverImageHandler implements RequestHandler<APIGatewayProxyReques
             }
 
             String originalKey = "main/" + userId + "/" + imageId;
-            String recycleKey = "deleted/" + userId + "/" + imageId;
+            String recycleKey = "recycle/" + userId + "/" + imageId;
 
-            Map<String, AttributeValue> item = dynamoUtils.getItemFromDynamo(TABLE_NAME, imageId);
+            log.info("Original Key: "+ originalKey);
+            log.info("recycle key: " + recycleKey);
+
+            Map<String, AttributeValue> item = dynamoUtils.getItemFromDynamo(tableName, imageId);
             s3Utils.validateOwnership(item, userId);
 
-            s3Utils.copyObject(RECYCLE_BUCKET, PRIMARY_BUCKET, recycleKey, originalKey);
-            s3Utils.deleteObject(RECYCLE_BUCKET, recycleKey);
+            s3Utils.copyObject(bucketName, recycleKey, originalKey);
+            s3Utils.deleteObject(bucketName, recycleKey);
 
-            dynamoUtils.updateImageStatus(TABLE_NAME, imageId, "active");
-            dynamoUtils.updateS3Key(TABLE_NAME, imageId, originalKey);
+            dynamoUtils.updateImageStatus(tableName, imageId, "active");
+            dynamoUtils.updateS3Key(tableName, imageId, originalKey);
             return ResponseUtils.successResponse(200, Map.of("message", "Image recovered: " + imageId));
         } catch (Exception e) {
             log.error("Failed to recover image: " + e.getMessage(), e);

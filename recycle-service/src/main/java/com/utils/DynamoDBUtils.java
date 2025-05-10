@@ -12,6 +12,7 @@ import java.util.Map;
 public class DynamoDBUtils {
 
     private static final Log log = LogFactory.getLog(DynamoDBUtils.class);
+    public static final String IMAGE_ID = "imageId";
     private final DynamoDbClient dynamoDbClient;
 
     public DynamoDBUtils() {
@@ -24,12 +25,10 @@ public class DynamoDBUtils {
         log.info(tableName);
         GetItemRequest request = GetItemRequest.builder()
                 .tableName(tableName)
-                .key(Map.of("imageId", AttributeValue.fromS(imageId)))
+                .key(Map.of(IMAGE_ID, AttributeValue.fromS(imageId)))
                 .build();
 
-        log.info(request);
         GetItemResponse response = dynamoDbClient.getItem(request);
-        log.info(response);
         if (response.item().isEmpty()) {
             throw new RuntimeException("Image not found in database");
         }
@@ -40,7 +39,7 @@ public class DynamoDBUtils {
     public void deleteRecordFromDynamo(String tableName, String imageId) {
         DeleteItemRequest request = DeleteItemRequest.builder()
                 .tableName(tableName)
-                .key(Map.of("imageId", AttributeValue.fromS(imageId)))
+                .key(Map.of(IMAGE_ID, AttributeValue.fromS(imageId)))
                 .build();
 
         dynamoDbClient.deleteItem(request);
@@ -52,7 +51,7 @@ public class DynamoDBUtils {
 
         UpdateItemRequest request = UpdateItemRequest.builder()
                 .tableName(tableName)
-                .key(Map.of("imageId", AttributeValue.fromS(imageId)))
+                .key(Map.of(IMAGE_ID, AttributeValue.fromS(imageId)))
                 .updateExpression("SET #status = :status")
                 .expressionAttributeNames(Map.of("#status", "status"))
                 .expressionAttributeValues(values)
@@ -63,7 +62,7 @@ public class DynamoDBUtils {
 
     public void updateS3Key(String tableName, String imageId, String newS3Key) {
         Map<String, AttributeValue> key = Map.of(
-                "imageId", AttributeValue.fromS(imageId)
+                IMAGE_ID, AttributeValue.fromS(imageId)
         );
 
         Map<String, AttributeValue> expressionAttributeValues = Map.of(

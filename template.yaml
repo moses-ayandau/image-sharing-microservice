@@ -21,8 +21,6 @@ Resources:
         MaxAge: "'3600'"
       Tags:
         Environment: "dev"
-      # Add Dependencies to ensure API methods are created before deployment
-      # This is done using SAM's OpenApi extension
       DefinitionBody:
         swagger: '2.0'
         info:
@@ -47,22 +45,10 @@ Resources:
                 httpMethod: POST
                 type: aws_proxy
 
-  # 🔹 S3 Bucket for Storing Images
+  # 🔹 Unified S3 Bucket for Active + Deleted Images
   ProcessedImageBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "image-recycler-bucket-${AWS::AccountId}-${AWS::Region}"
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        IgnorePublicAcls: true
-        BlockPublicPolicy: true
-        RestrictPublicBuckets: true
-
-  # 🔹 S3 Bucket for Storing Images
-  RecycleBinImageBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "recycled-bucket-${AWS::AccountId}-${AWS::Region}"
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         IgnorePublicAcls: true
@@ -70,15 +56,21 @@ Resources:
         RestrictPublicBuckets: true
       LifecycleConfiguration:
         Rules:
-          - Id: AutoDeleteDeletedImages
+          - Id: TransitionToGlacierDeepArchive
             Prefix: recycle/
             Status: Enabled
+            Transitions:
+              - StorageClass: DEEP_ARCHIVE
+                TransitionInDays: 1
             ExpirationInDays: 30
 
   # 🔹 DynamoDB Table for Image Metadata
   ImageMetadataTable:
-    Type: AWS::DynamoDB::Table
+    Type: AWS::DynamoDB::GlobalTable
     Properties:
+      Replicas:
+        - Region: eu-central-1
+        - Region: eu-west-1
       TableName: ImageMetadata
       AttributeDefinitions:
         - AttributeName: imageId
@@ -91,6 +83,8 @@ Resources:
         - AttributeName: imageId
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
       GlobalSecondaryIndexes:
         - IndexName: OwnerStatusIndex
           KeySchema:
@@ -107,6 +101,8 @@ Resources:
   # 🔹 Lambda Function: Delete Image (Move to Recycle Bin)
   DeleteImageFunction:
     Type: AWS::Serverless::Function
+    DependsOn:
+        - ProcessedImageBucket
     Properties:
       FunctionName: image-recycler-delete-function
       CodeUri: recycle-service/
@@ -119,17 +115,16 @@ Resources:
             TableName: !Ref ImageMetadataTable
         - S3CrudPolicy:
             BucketName: !Ref ProcessedImageBucket
-        - S3CrudPolicy:
-            BucketName: !Ref RecycleBinImageBucket
       Environment:
         Variables:
           PRIMARY_BUCKET: !Ref ProcessedImageBucket
           IMAGE_TABLE: !Ref ImageMetadataTable
-          RECYCLE_BUCKET: !Ref RecycleBinImageBucket
 
-  # 🔹 Lambda Function: Restore Image from Recycle Bin
+  # 🔹 Lambda Function: Restore Image
   RecoverImageFunction:
     Type: AWS::Serverless::Function
+    DependsOn:
+        - ProcessedImageBucket
     Properties:
       FunctionName: image-recycler-recover-function
       CodeUri: recycle-service/
@@ -142,18 +137,16 @@ Resources:
             TableName: !Ref ImageMetadataTable
         - S3CrudPolicy:
             BucketName: !Ref ProcessedImageBucket
-        - S3CrudPolicy:
-            BucketName: !Ref RecycleBinImageBucket
       Environment:
         Variables:
           PRIMARY_BUCKET: !Ref ProcessedImageBucket
           IMAGE_TABLE: !Ref ImageMetadataTable
-          RECYCLE_BUCKET: !Ref RecycleBinImageBucket
-      # Remove the API Event here since we're using OpenAPI definition
 
   # 🔹 Lambda Function: Permanent Deletion
   PermanentlyDeleteImageFunction:
     Type: AWS::Serverless::Function
+    DependsOn:
+        - ProcessedImageBucket
     Properties:
       FunctionName: image-recycler-permanent-delete-function
       CodeUri: recycle-service/
@@ -166,15 +159,13 @@ Resources:
             TableName: !Ref ImageMetadataTable
         - S3CrudPolicy:
             BucketName: !Ref ProcessedImageBucket
-        - S3CrudPolicy:
-            BucketName: !Ref RecycleBinImageBucket
       Environment:
         Variables:
           IMAGE_TABLE: !Ref ImageMetadataTable
-          RECYCLE_BUCKET: !Ref RecycleBinImageBucket
-      # Remove the API Event here since we're using OpenAPI definition
+          PRIMARY_BUCKET: !Ref ProcessedImageBucket
 
-  # Lambda permissions for API Gateway
+
+  # 🔹 Lambda Permissions for API Gateway
   DeleteImagePermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -200,7 +191,6 @@ Resources:
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/DELETE/images/{imageId}/permanent-delete"
 
 Outputs:
-  # API Gateway outputs
   ApiEndpoint:
     Description: "API Gateway endpoint URL for Prod stage"
     Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
@@ -210,5 +200,5 @@ Outputs:
     Value: !Ref ImageMetadataTable
 
   ProcessedImageBucketName:
-    Description: Name of the S3 bucket where images are stored
+    Description: Name of the S3 bucket used for both active and deleted images
     Value: !Ref ProcessedImageBucket

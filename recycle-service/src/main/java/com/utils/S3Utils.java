@@ -10,7 +10,6 @@ import java.util.Map;
 
 public class S3Utils {
 
-    private static final Log log = LogFactory.getLog(S3Utils.class);
     private final S3Client s3Client;
 
     public S3Utils() {
@@ -29,11 +28,11 @@ public class S3Utils {
         }
     }
 
-    public void copyObject(String sourceBucket, String destinationBucket, String sourceKey, String destKey) {
+    public void copyObject(String bucketName, String sourceKey, String destKey) {
         s3Client.copyObject(builder -> builder
-                .sourceBucket(sourceBucket)
+                .sourceBucket(bucketName)
                 .sourceKey(sourceKey)
-                .destinationBucket(destinationBucket)
+                .destinationBucket(bucketName)
                 .destinationKey(destKey));
     }
 }

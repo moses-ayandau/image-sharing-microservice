@@ -15,8 +15,10 @@ import java.util.Map;
 
 @Slf4j
 public class PermanentlyDeleteImageHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
-    private final String TABLE_NAME = System.getenv("IMAGE_TABLE");
-    private final String RECYCLE_BUCKET = System.getenv("RECYCLE_BUCKET");
+    public static final String S_3_KEY = "S3Key";
+    private final String tableName = System.getenv("IMAGE_TABLE");
+    private final String bucketName = System.getenv("PRIMARY_BUCKET");
+
     private final S3Utils s3Utils = new S3Utils();
     private final DynamoDBUtils dynamoUtils = new DynamoDBUtils();
 
@@ -28,27 +30,32 @@ public class PermanentlyDeleteImageHandler implements RequestHandler<APIGatewayP
             }
 
             String imageId = input.getPathParameters().get("imageId");
-            String ownerId = input.getQueryStringParameters().get("ownerId");
+            String userId = input.getQueryStringParameters().get("userId");
 
-            log.info("Owner and ImageId {}, {} ", ownerId, imageId);
             // Validate actual parameter values
             if (imageId == null || imageId.trim().isEmpty()) {
                 return ResponseUtils.errorResponse(400, "Missing or empty 'imageId'");
             }
 
-            if (ownerId == null || ownerId.trim().isEmpty()) {
-                return ResponseUtils.errorResponse(400, "Missing or empty 'ownerId'");
+            if (userId == null || userId.trim().isEmpty()) {
+                return ResponseUtils.errorResponse(400, "Missing or empty 'userId'");
             }
 
-            Map<String, AttributeValue> item = dynamoUtils.getItemFromDynamo(TABLE_NAME, imageId);
-            s3Utils.validateOwnership(item, ownerId);
+            Map<String, AttributeValue> item = dynamoUtils.getItemFromDynamo(tableName, imageId);
+            if (!item.containsKey(S_3_KEY) || item.get(S_3_KEY) == null || item.get(S_3_KEY).s() == null || item.get(S_3_KEY).s().isEmpty()) {
+                return ResponseUtils.errorResponse(400, "Missing or invalid S3Key");
+            }
 
-            log.info(item.toString());
-            String key = item.get("S3Key").s();
-            s3Utils.deleteObject(RECYCLE_BUCKET, key);
-            dynamoUtils.deleteRecordFromDynamo(TABLE_NAME, imageId);
+            s3Utils.validateOwnership(item, userId);
+            String key = item.get(S_3_KEY).s();
+            if(!key.startsWith("recycle/")){
+                return ResponseUtils.errorResponse(403, "Image must be in recycle bin to be permanently deleted");
+            }
 
-            return ResponseUtils.successResponse(200, "Image permanently deleted");
+            s3Utils.deleteObject(bucketName, key);
+            dynamoUtils.deleteRecordFromDynamo(tableName, imageId);
+
+            return ResponseUtils.successResponse(200, Map.of("message","Image permanently deleted") + imageId);
 
         } catch (Exception e) {
             context.getLogger().log("Error permanently deleting image: " + e.getMessage());

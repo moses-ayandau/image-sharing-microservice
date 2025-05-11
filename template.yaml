@@ -836,6 +836,11 @@ Resources:
     Properties:
       Handler: com.handlers.healthCheck.ComponentHealthCheckHandler::handleRequest
       CodeUri: healthcheck-service/
+      Environment:
+        Variables:
+          IMAGE_TABLE_NAME: !Ref ImageTableName
+          COGNITO_USER_POOL_ID: !Ref CognitoUserPool
+          PROCESSED_BUCKET: !Ref ProcessedBucket
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -843,18 +848,26 @@ Resources:
               Action:
                 - dynamodb:ListTables
                 - dynamodb:DescribeTable
-              Resource: '*'
+              Resource: !GetAtt PhotoTable.Arn
             - Effect: Allow
               Action:
                 - s3:ListBuckets
                 - s3:ListAllMyBuckets
                 - s3:GetBucketLocation
                 - s3:HeadBucket
-              Resource: '*'
+                - s3:GetBucketAcl
+                - s3:GetBucketPolicy
+                - s3:GetBucketVersioning
+                - s3:GetBucketTagging
+                - s3:ListBucket
+              Resource: 
+                - !Sub "arn:aws:s3:::${ProcessedBucket}"
+                - !Sub "arn:aws:s3:::${ProcessedBucket}/*"
             - Effect: Allow
               Action:
                 - cognito-idp:ListUserPools
-              Resource: '*'
+                - cognito-idp:DescribeUserPool
+              Resource: !GetAtt CognitoUserPool.Arn
             - Effect: Allow
               Action:
                 - logs:CreateLogGroup

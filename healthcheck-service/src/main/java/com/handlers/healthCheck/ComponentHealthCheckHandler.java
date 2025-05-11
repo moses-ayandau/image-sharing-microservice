@@ -29,7 +29,8 @@ public class ComponentHealthCheckHandler implements RequestHandler<APIGatewayPro
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     public ComponentHealthCheckHandler() {
-        this.region = Region.EU_CENTRAL_1;
+        // Use us-east-1 as the default region since that's where most AWS services are created by default
+        this.region = Region.US_EAST_1;
         this.dynamoDbClient = DynamoDbClient.builder().region(region).build();
         this.s3Client = S3Client.builder().region(region).build();
         this.cognitoClient = CognitoIdentityProviderClient.builder().region(region).build();
@@ -49,23 +50,92 @@ public class ComponentHealthCheckHandler implements RequestHandler<APIGatewayPro
                 input.getPathParameters().get("component") : "all";
 
         Map<String, Object> healthResults = new HashMap<>();
+        boolean allHealthy = true;
 
         try {
             switch (component.toLowerCase()) {
                 case "cognito":
-                    healthResults.put("cognito", ServiceHealthCheck.checkCognitoHealth(context, cognitoClient, CONNECTION_TIMEOUT_SECONDS));
+                    String userPoolId = System.getenv("COGNITO_USER_POOL_ID");
+                    if (userPoolId == null || userPoolId.isEmpty()) {
+                        context.getLogger().log("Warning: COGNITO_USER_POOL_ID environment variable not set");
+                        return new APIGatewayProxyResponseEvent()
+                                .withStatusCode(500)
+                                .withHeaders(headers)
+                                .withBody("{\"error\": \"Cognito User Pool ID not configured\"}")
+                                .withIsBase64Encoded(false);
+                    }
+                    Map<String, Object> cognitoHealth = ServiceHealthCheck.checkCognitoHealth(context, cognitoClient, CONNECTION_TIMEOUT_SECONDS, userPoolId);
+                    healthResults.put("cognito", cognitoHealth);
+                    allHealthy &= "healthy".equals(cognitoHealth.get("status"));
                     break;
                 case "s3":
-                    healthResults.put("s3", ServiceHealthCheck.checkS3Health(context, s3Client, CONNECTION_TIMEOUT_SECONDS));
+                    String bucketName = System.getenv("PROCESSED_BUCKET");
+                    if (bucketName == null || bucketName.isEmpty()) {
+                        context.getLogger().log("Warning: PROCESSED_BUCKET environment variable not set");
+                        return new APIGatewayProxyResponseEvent()
+                                .withStatusCode(500)
+                                .withHeaders(headers)
+                                .withBody("{\"error\": \"Processed bucket name not configured\"}")
+                                .withIsBase64Encoded(false);
+                    }
+                    // Create a new S3 client for each request to handle potential region redirects
+                    S3Client requestS3Client = S3Client.builder()
+                            .region(Region.US_EAST_1)  // Start with us-east-1
+                            .build();
+                    Map<String, Object> s3Health = ServiceHealthCheck.checkS3Health(context, requestS3Client, CONNECTION_TIMEOUT_SECONDS, bucketName);
+                    healthResults.put("s3", s3Health);
+                    allHealthy &= "healthy".equals(s3Health.get("status"));
                     break;
                 case "dynamodb":
-                    healthResults.put("dynamodb", ServiceHealthCheck.checkDynamoDBHealth(context, dynamoDbClient, CONNECTION_TIMEOUT_SECONDS));
+                    String tableName = System.getenv("IMAGE_TABLE_NAME");
+                    if (tableName == null || tableName.isEmpty()) {
+                        context.getLogger().log("Warning: IMAGE_TABLE_NAME environment variable not set, using default table name");
+                        tableName = "photo"; // Default table name
+                    }
+                    Map<String, Object> dynamoHealth = ServiceHealthCheck.checkDynamoDBHealth(context, dynamoDbClient, CONNECTION_TIMEOUT_SECONDS, tableName);
+                    healthResults.put("dynamodb", dynamoHealth);
+                    allHealthy &= "healthy".equals(dynamoHealth.get("status"));
                     break;
                 case "all":
                 default:
-                    healthResults.put("cognito", ServiceHealthCheck.checkCognitoHealth(context, cognitoClient, CONNECTION_TIMEOUT_SECONDS));
-                    healthResults.put("s3", ServiceHealthCheck.checkS3Health(context, s3Client, CONNECTION_TIMEOUT_SECONDS));
-                    healthResults.put("dynamodb", ServiceHealthCheck.checkDynamoDBHealth(context, dynamoDbClient, CONNECTION_TIMEOUT_SECONDS));
+                    String allUserPoolId = System.getenv("COGNITO_USER_POOL_ID");
+                    if (allUserPoolId == null || allUserPoolId.isEmpty()) {
+                        context.getLogger().log("Warning: COGNITO_USER_POOL_ID environment variable not set");
+                        return new APIGatewayProxyResponseEvent()
+                                .withStatusCode(500)
+                                .withHeaders(headers)
+                                .withBody("{\"error\": \"Cognito User Pool ID not configured\"}")
+                                .withIsBase64Encoded(false);
+                    }
+                    Map<String, Object> allCognitoHealth = ServiceHealthCheck.checkCognitoHealth(context, cognitoClient, CONNECTION_TIMEOUT_SECONDS, allUserPoolId);
+                    healthResults.put("cognito", allCognitoHealth);
+                    allHealthy &= "healthy".equals(allCognitoHealth.get("status"));
+                    
+                    String allBucketName = System.getenv("PROCESSED_BUCKET");
+                    if (allBucketName == null || allBucketName.isEmpty()) {
+                        context.getLogger().log("Warning: PROCESSED_BUCKET environment variable not set");
+                        return new APIGatewayProxyResponseEvent()
+                                .withStatusCode(500)
+                                .withHeaders(headers)
+                                .withBody("{\"error\": \"Processed bucket name not configured\"}")
+                                .withIsBase64Encoded(false);
+                    }
+                    // Create a new S3 client for each request to handle potential region redirects
+                    S3Client allRequestS3Client = S3Client.builder()
+                            .region(Region.US_EAST_1)  // Start with us-east-1
+                            .build();
+                    Map<String, Object> allS3Health = ServiceHealthCheck.checkS3Health(context, allRequestS3Client, CONNECTION_TIMEOUT_SECONDS, allBucketName);
+                    healthResults.put("s3", allS3Health);
+                    allHealthy &= "healthy".equals(allS3Health.get("status"));
+                    
+                    String allTableName = System.getenv("IMAGE_TABLE_NAME");
+                    if (allTableName == null || allTableName.isEmpty()) {
+                        context.getLogger().log("Warning: IMAGE_TABLE_NAME environment variable not set, using default table name");
+                        allTableName = "photo"; // Default table name
+                    }
+                    Map<String, Object> allDynamoHealth = ServiceHealthCheck.checkDynamoDBHealth(context, dynamoDbClient, CONNECTION_TIMEOUT_SECONDS, allTableName);
+                    healthResults.put("dynamodb", allDynamoHealth);
+                    allHealthy &= "healthy".equals(allDynamoHealth.get("status"));
             }
 
             // Convert health results to JSON
@@ -81,8 +151,9 @@ public class ComponentHealthCheckHandler implements RequestHandler<APIGatewayPro
                         .withIsBase64Encoded(false);
             }
 
+            // Return 500 if any service is unhealthy, 200 if all are healthy
             return new APIGatewayProxyResponseEvent()
-                    .withStatusCode(500)
+                    .withStatusCode(allHealthy ? 200 : 500)
                     .withHeaders(headers)
                     .withBody(responseBody)
                     .withIsBase64Encoded(false);

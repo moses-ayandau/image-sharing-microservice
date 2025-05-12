@@ -6,7 +6,7 @@ Description: Integrated Image Processing System with Upload, Processing, Recycli
 Parameters:
   Environment:
     Type: String
-    Default: dev
+    Default: test
     Description: Environment name
     AllowedValues:
       - dev
@@ -485,7 +485,7 @@ Resources:
   CognitoDomain:
     Type: AWS::Cognito::UserPoolDomain
     Properties:
-      Domain: !Sub "photo-blog-auth-${Environment}-${AWS::AccountId}"
+      Domain: !Sub photo-app-auth-${Environment}-${AWS::AccountId}
       UserPoolId: !Ref CognitoUserPool
 
   # ===== Lambda Functions: Upload and Processing =====
@@ -689,7 +689,7 @@ Resources:
     Properties:
       FunctionName: !Sub "photo-blog-post-confirmation-${Environment}"
       Handler: com.amalitechphotoappcognitoauth.handlers.PostConfirmationHandler::handleRequest
-      CodeUri: photo-blog-auth/
+      CodeUri: cognito-service/
       Environment:
         Variables:
           SNS_TOPIC_ARN: !Ref PostConfirmationSNSTopic
@@ -713,7 +713,7 @@ Resources:
     Properties:
       FunctionName: !Sub "photo-blog-welcome-email-${Environment}"
       Handler: com.amalitechphotoappcognitoauth.handlers.WelcomeEmailHandler::handleRequest
-      CodeUri: photo-blog-auth/
+      CodeUri: cognito-service/
       Timeout: 60
       ReservedConcurrentExecutions: 10
       Environment:
@@ -745,7 +745,7 @@ Resources:
     Properties:
       FunctionName: !Sub "photo-blog-verify-email-${Environment}"
       Handler: com.amalitechphotoappcognitoauth.handlers.VerifyEmailHandler::handleRequest
-      CodeUri: photo-blog-auth/
+      CodeUri: cognito-service/
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
@@ -768,7 +768,7 @@ Resources:
     Properties:
       FunctionName: !Sub "photo-blog-signin-alert-${Environment}"
       Handler: com.amalitechphotoappcognitoauth.handlers.SigninAlertHandler::handleRequest
-      CodeUri: photo-blog-auth/
+      CodeUri: cognito-service/
       Environment:
         Variables:
           EMAIL_SOURCE: !Sub "noreply@${EmailDomain}"

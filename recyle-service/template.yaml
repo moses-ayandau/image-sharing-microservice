@@ -1,0 +1,145 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Image recycling bin feature using AWS SAM
+
+Resources:
+
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+        AllowCredentials: false
+        MaxAge: "'3600'"
+
+  ProcessedImageBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: mscv2group1-asset-bucket
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: AutoDeleteDeletedImages
+            Prefix: deleted/
+            Status: Enabled
+            ExpirationInDays: 30
+
+  # 🔹 DynamoDB Table for Image Metadata
+  ImageMetadataTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ImageMetadata
+      AttributeDefinitions:
+        - AttributeName: imageId
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+      KeySchema:
+        - AttributeName: imageId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      GlobalSecondaryIndexes:
+        - IndexName: OwnerStatusIndex
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+            - AttributeName: status
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: deletedAt
+        Enabled: true
+
+  # 🔹 Lambda Function: Delete Image (Move to Recycle Bin)
+  HandleDeleteImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: com.handlers.DeleteImageHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 10
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ImageMetadataTable
+        - S3CrudPolicy:
+            BucketName: !Ref ProcessedImageBucket
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /images/{imageId}/recycle
+            Method: POST
+      Environment:
+        Variables:
+          PROCESSED_IMAGE_BUCKET: !Ref ProcessedImageBucket
+          IMAGE_METADATA_TABLE: !Ref ImageMetadataTable
+
+  # 🔹 Lambda Function: Restore Image from Recycle Bin
+  RestoreImageFromBinFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: com.handlers.RecoverImageHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 10
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ImageMetadataTable
+        - S3CrudPolicy:
+            BucketName: !Ref ProcessedImageBucket
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /images/{imageId}/restore
+            Method: POST
+
+  # 🔹 Lambda Function: Permanent Deletion
+  PermanentlyDeleteImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: com.handlers.PermanentlyDeleteImageHandler::handleRequest
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 10
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ImageMetadataTable
+        - S3CrudPolicy:
+            BucketName: !Ref ProcessedImageBucket
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /images/{imageId}/permanent-delete
+            Method: DELETE
+
+Outputs:
+
+  ImageMetadataTableName:
+    Description: Name of the DynamoDB table used for image metadata
+    Value: !Ref ImageMetadataTable
+
+  ProcessedImageBucketName:
+    Description: Name of the S3 bucket where images are stored
+    Value: !Ref ProcessedImageBucket
+
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/Prod/"

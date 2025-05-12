@@ -3,7 +3,7 @@
 version = 0.1
 
 [default.global.parameters]
-stack_name = "photo-processing-blog"
+stack_name = "image-processor"
 
 [default.build.parameters]
 cached = true
@@ -16,6 +16,9 @@ lint = true
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = true
 resolve_s3 = true
+s3_prefix = "image-processor"
+region = "eu-central-1"
+image_repositories = []
 
 [default.package.parameters]
 resolve_s3 = true

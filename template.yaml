@@ -145,24 +145,24 @@ Resources:
                 uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UploadImageFunction.Arn}/invocations"
                 httpMethod: POST
                 type: aws_proxy
-          /images/{photoId}/delete:
-            post:
-              x-amazon-apigateway-integration:
-                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteImageFunction.Arn}/invocations"
-                httpMethod: POST
-                type: aws_proxy
-          /images/{photoId}/restore:
-            post:
-              x-amazon-apigateway-integration:
-                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RecoverImageFunction.Arn}/invocations"
-                httpMethod: POST
-                type: aws_proxy
-          /images/{photoId}/permanent-delete:
-            delete:
-              x-amazon-apigateway-integration:
-                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PermanentlyDeleteImageFunction.Arn}/invocations"
-                httpMethod: POST
-                type: aws_proxy
+          # /images/{photoId}/delete:
+          #   post:
+          #     x-amazon-apigateway-integration:
+          #       uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteImageFunction.Arn}/invocations"
+          #       httpMethod: POST
+          #       type: aws_proxy
+          # /images/{photoId}/restore:
+          #   post:
+          #     x-amazon-apigateway-integration:
+          #       uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RecoverImageFunction.Arn}/invocations"
+          #       httpMethod: POST
+          #       type: aws_proxy
+          # /images/{photoId}/permanent-delete:
+          #   delete:
+          #     x-amazon-apigateway-integration:
+          #       uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PermanentlyDeleteImageFunction.Arn}/invocations"
+          #       httpMethod: POST
+          #       type: aws_proxy
           /health:
             get:
               x-amazon-apigateway-integration:
@@ -270,26 +270,26 @@ Resources:
             Status: Enabled
             ExpirationInDays: 30
 
-  CognitoBackupBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "photo-blog-cognito-backups-${Environment}"
-      VersioningConfiguration:
-        Status: Enabled
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldBackups
-            Status: Enabled
-            ExpirationInDays: 90
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        IgnorePublicAcls: true
-        BlockPublicPolicy: true
-        RestrictPublicBuckets: true
+  # CognitoBackupBucket:
+  #   Type: AWS::S3::Bucket
+  #   Properties:
+  #     BucketName: !Sub "photo-blog-cognito-backups-${Environment}"
+  #     VersioningConfiguration:
+  #       Status: Enabled
+  #     BucketEncryption:
+  #       ServerSideEncryptionConfiguration:
+  #         - ServerSideEncryptionByDefault:
+  #             SSEAlgorithm: AES256
+  #     LifecycleConfiguration:
+  #       Rules:
+  #         - Id: DeleteOldBackups
+  #           Status: Enabled
+  #           ExpirationInDays: 90
+  #     PublicAccessBlockConfiguration:
+  #       BlockPublicAcls: true
+  #       IgnorePublicAcls: true
+  #       BlockPublicPolicy: true
+  #       RestrictPublicBuckets: true
 
   # ===== DynamoDB Tables =====
   PhotoTable:
@@ -372,19 +372,19 @@ Resources:
               - sns:Publish
             Resource: !GetAtt PostConfirmationSNSTopic.TopicArn
 
-  WelcomeEmailLambdaSubscription:
-    Type: AWS::SNS::Subscription
-    Properties:
-      Protocol: lambda
-      TopicArn: !Ref PostConfirmationSNSTopic
-      Endpoint: !GetAtt WelcomeEmailLambda.Arn
+  # WelcomeEmailLambdaSubscription:
+  #   Type: AWS::SNS::Subscription
+  #   Properties:
+  #     Protocol: lambda
+  #     TopicArn: !Ref PostConfirmationSNSTopic
+  #     Endpoint: !GetAtt WelcomeEmailLambda.Arn
 
-  VerifyEmailLambdaSubscription:
-    Type: AWS::SNS::Subscription
-    Properties:
-      Protocol: lambda
-      TopicArn: !Ref PostConfirmationSNSTopic
-      Endpoint: !GetAtt VerifyEmailLambda.Arn
+  # VerifyEmailLambdaSubscription:
+  #   Type: AWS::SNS::Subscription
+  #   Properties:
+  #     Protocol: lambda
+  #     TopicArn: !Ref PostConfirmationSNSTopic
+  #     Endpoint: !GetAtt VerifyEmailLambda.Arn
 
   HealthAlertTopic:
     Type: AWS::SNS::Topic
@@ -416,9 +416,6 @@ Resources:
   # ===== Cognito Resources =====
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
-    #    DependsOn:
-    #      - SigninAlertLambda
-    #      - PostConfirmationLambda
     Properties:
       UserPoolName: !Sub "PhotoBlogUserPool-${Environment}"
       AdminCreateUserConfig:
@@ -444,9 +441,9 @@ Resources:
           AttributeDataType: String
           Mutable: true
           Required: true
-      LambdaConfig:
-        PostConfirmation: !GetAtt PostConfirmationLambda.Arn
-        PostAuthentication: !GetAtt SigninAlertLambda.Arn
+      # LambdaConfig:
+      #   PostConfirmation: !GetAtt PostConfirmationLambda.Arn
+      #   PostAuthentication: !GetAtt SigninAlertLambda.Arn
       AccountRecoverySetting:
         RecoveryMechanisms:
           - Priority: 1
@@ -604,86 +601,86 @@ Resources:
         Environment: !Ref Environment
 
   # ===== Lambda Functions: Recycle Bin Feature =====
-  DeleteImageFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub "image-delete-function-${Environment}"
-      CodeUri: recycle-service/
-      Handler: com.handlers.DeleteImageHandler::handleRequest
-      Description: Moves images to the recycle bin
-      Environment:
-        Variables:
-          PRIMARY_BUCKET: !Ref ProcessedBucket
-          IMAGE_TABLE: !Ref ImageTableName
-          RECYCLE_BUCKET: !Ref RecycleBinBucket
-          ENVIRONMENT: !Ref Environment
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref PhotoTable
-        - S3CrudPolicy:
-            BucketName: !Ref ProcessedBucket
-        - S3CrudPolicy:
-            BucketName: !Ref RecycleBinBucket
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /images/{photoId}/delete
-            Method: post
+  # DeleteImageFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     FunctionName: !Sub "image-delete-function-${Environment}"
+  #     CodeUri: recycle-service/
+  #     Handler: com.handlers.DeleteImageHandler::handleRequest
+  #     Description: Moves images to the recycle bin
+  #     Environment:
+  #       Variables:
+  #         PRIMARY_BUCKET: !Ref ProcessedBucket
+  #         IMAGE_TABLE: !Ref ImageTableName
+  #         RECYCLE_BUCKET: !Ref RecycleBinBucket
+  #         ENVIRONMENT: !Ref Environment
+  #     Policies:
+  #       - DynamoDBCrudPolicy:
+  #           TableName: !Ref PhotoTable
+  #       - S3CrudPolicy:
+  #           BucketName: !Ref ProcessedBucket
+  #       - S3CrudPolicy:
+  #           BucketName: !Ref RecycleBinBucket
+  #     Events:
+  #       ApiEvent:
+  #         Type: Api
+  #         Properties:
+  #           RestApiId: !Ref ApiGateway
+  #           Path: /images/{photoId}/delete
+  #           Method: post
 
-  RecoverImageFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub "image-recover-function-${Environment}"
-      CodeUri: recycle-service/
-      Handler: com.handlers.RecoverImageHandler::handleRequest
-      Description: Restores images from the recycle bin
-      Environment:
-        Variables:
-          PRIMARY_BUCKET: !Ref ProcessedBucket
-          IMAGE_TABLE: !Ref ImageTableName
-          RECYCLE_BUCKET: !Ref RecycleBinBucket
-          ENVIRONMENT: !Ref Environment
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref PhotoTable
-        - S3CrudPolicy:
-            BucketName: !Ref ProcessedBucket
-        - S3CrudPolicy:
-            BucketName: !Ref RecycleBinBucket
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /images/{photoId}/restore
-            Method: post
+  # RecoverImageFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     FunctionName: !Sub "image-recover-function-${Environment}"
+  #     CodeUri: recycle-service/
+  #     Handler: com.handlers.RecoverImageHandler::handleRequest
+  #     Description: Restores images from the recycle bin
+  #     Environment:
+  #       Variables:
+  #         PRIMARY_BUCKET: !Ref ProcessedBucket
+  #         IMAGE_TABLE: !Ref ImageTableName
+  #         RECYCLE_BUCKET: !Ref RecycleBinBucket
+  #         ENVIRONMENT: !Ref Environment
+  #     Policies:
+  #       - DynamoDBCrudPolicy:
+  #           TableName: !Ref PhotoTable
+  #       - S3CrudPolicy:
+  #           BucketName: !Ref ProcessedBucket
+  #       - S3CrudPolicy:
+  #           BucketName: !Ref RecycleBinBucket
+  #     Events:
+  #       ApiEvent:
+  #         Type: Api
+  #         Properties:
+  #           RestApiId: !Ref ApiGateway
+  #           Path: /images/{photoId}/restore
+  #           Method: post
 
-  PermanentlyDeleteImageFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub "image-permanent-delete-function-${Environment}"
-      CodeUri: recycle-service/
-      Handler: com.handlers.PermanentlyDeleteImageHandler::handleRequest
-      Description: Permanently deletes images from the recycle bin
-      Environment:
-        Variables:
-          IMAGE_TABLE: !Ref ImageTableName
-          RECYCLE_BUCKET: !Ref RecycleBinBucket
-          ENVIRONMENT: !Ref Environment
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref PhotoTable
-        - S3CrudPolicy:
-            BucketName: !Ref RecycleBinBucket
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /images/{photoId}/permanent-delete
-            Method: delete
+  # PermanentlyDeleteImageFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     FunctionName: !Sub "image-permanent-delete-function-${Environment}"
+  #     CodeUri: recycle-service/
+  #     Handler: com.handlers.PermanentlyDeleteImageHandler::handleRequest
+  #     Description: Permanently deletes images from the recycle bin
+  #     Environment:
+  #       Variables:
+  #         IMAGE_TABLE: !Ref ImageTableName
+  #         RECYCLE_BUCKET: !Ref RecycleBinBucket
+  #         ENVIRONMENT: !Ref Environment
+  #     Policies:
+  #       - DynamoDBCrudPolicy:
+  #           TableName: !Ref PhotoTable
+  #       - S3CrudPolicy:
+  #           BucketName: !Ref RecycleBinBucket
+  #     Events:
+  #       ApiEvent:
+  #         Type: Api
+  #         Properties:
+  #           RestApiId: !Ref ApiGateway
+  #           Path: /images/{photoId}/permanent-delete
+  #           Method: delete
 
   # ===== Lambda Functions: Authentication =====
   PostConfirmationLambda:
@@ -791,7 +788,6 @@ Resources:
                 - logs:CreateLogStream
                 - logs:PutLogEvents
               Resource: '*'
-
   # ===== Lambda Functions: Health Check =====
   HealthCheckFunction:
     Type: AWS::Serverless::Function
@@ -836,6 +832,11 @@ Resources:
     Properties:
       Handler: com.handlers.healthCheck.ComponentHealthCheckHandler::handleRequest
       CodeUri: healthcheck-service/
+      Environment:
+        Variables:
+          IMAGE_TABLE_NAME: !Ref ImageTableName
+          COGNITO_USER_POOL_ID: !Ref CognitoUserPool
+          PROCESSED_BUCKET: !Ref ProcessedBucket
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -843,18 +844,26 @@ Resources:
               Action:
                 - dynamodb:ListTables
                 - dynamodb:DescribeTable
-              Resource: '*'
+              Resource: !GetAtt PhotoTable.Arn
             - Effect: Allow
               Action:
                 - s3:ListBuckets
                 - s3:ListAllMyBuckets
                 - s3:GetBucketLocation
                 - s3:HeadBucket
-              Resource: '*'
+                - s3:GetBucketAcl
+                - s3:GetBucketPolicy
+                - s3:GetBucketVersioning
+                - s3:GetBucketTagging
+                - s3:ListBucket
+              Resource: 
+                - !Sub "arn:aws:s3:::${ProcessedBucket}"
+                - !Sub "arn:aws:s3:::${ProcessedBucket}/*"
             - Effect: Allow
               Action:
                 - cognito-idp:ListUserPools
-              Resource: '*'
+                - cognito-idp:DescribeUserPool
+              Resource: !GetAtt CognitoUserPool.Arn
             - Effect: Allow
               Action:
                 - logs:CreateLogGroup
@@ -947,37 +956,37 @@ Resources:
                 Resource: "*"
 
   # ===== Lambda Permissions =====
-  LambdaInvokePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !GetAtt PostConfirmationLambda.Arn
-      Action: lambda:InvokeFunction
-      Principal: cognito-idp.amazonaws.com
-      SourceArn: !GetAtt CognitoUserPool.Arn
+  # LambdaInvokePermission:
+  #   Type: AWS::Lambda::Permission
+  #   Properties:
+  #     FunctionName: !GetAtt PostConfirmationLambda.Arn
+  #     Action: lambda:InvokeFunction
+  #     Principal: cognito-idp.amazonaws.com
+  #     SourceArn: !GetAtt CognitoUserPool.Arn
 
-  WelcomeEmailLambdaPermissionSNS:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !GetAtt WelcomeEmailLambda.Arn
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref PostConfirmationSNSTopic
+  # WelcomeEmailLambdaPermissionSNS:
+  #   Type: AWS::Lambda::Permission
+  #   Properties:
+  #     Action: lambda:InvokeFunction
+  #     FunctionName: !GetAtt WelcomeEmailLambda.Arn
+  #     Principal: sns.amazonaws.com
+  #     SourceArn: !Ref PostConfirmationSNSTopic
 
-  VerifyEmailLambdaPermissionSNS:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !GetAtt VerifyEmailLambda.Arn
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref PostConfirmationSNSTopic
+  # VerifyEmailLambdaPermissionSNS:
+  #   Type: AWS::Lambda::Permission
+  #   Properties:
+  #     Action: lambda:InvokeFunction
+  #     FunctionName: !GetAtt VerifyEmailLambda.Arn
+  #     Principal: sns.amazonaws.com
+  #     SourceArn: !Ref PostConfirmationSNSTopic
 
-  LambdaInvokePermissionSignin:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !GetAtt SigninAlertLambda.Arn
-      Action: lambda:InvokeFunction
-      Principal: cognito-idp.amazonaws.com
-      SourceArn: !GetAtt CognitoUserPool.Arn
+  # LambdaInvokePermissionSignin:
+  #   Type: AWS::Lambda::Permission
+  #   Properties:
+  #     FunctionName: !GetAtt SigninAlertLambda.Arn
+  #     Action: lambda:InvokeFunction
+  #     Principal: cognito-idp.amazonaws.com
+  #     SourceArn: !GetAtt CognitoUserPool.Arn
 
   # ===== Route 53 Health Checks =====
   ApiHealthCheck:

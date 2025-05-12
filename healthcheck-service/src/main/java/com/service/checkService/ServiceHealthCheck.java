@@ -1,4 +1,4 @@
-package com.utils.checkUtils;
+package com.service.checkService;
 
 import com.amazonaws.services.lambda.runtime.Context;
 import software.amazon.awssdk.services.cognitoidentityprovider.model.ListUserPoolsRequest;

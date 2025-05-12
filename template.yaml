@@ -110,7 +110,7 @@ Resources:
     Type: AWS::ApiGateway::Account
     Properties:
       CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchRole.Arn
-    DependsOn: ApiGatewayCloudWatchRole
+#    DependsOn: ApiGatewayCloudWatchRole
 
   # Main API Gateway for the entire application
   ApiGateway:
@@ -217,7 +217,7 @@ Resources:
                 uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ShareImageFunction.Arn}/invocations"
                 httpMethod: POST
                 type: aws_proxy
-    DependsOn: ApiGatewayAccount
+#    DependsOn: ApiGatewayAccount
 
   # SSL Certificate for domain
   APICertificate:
@@ -469,9 +469,9 @@ Resources:
   # ===== Cognito Resources =====
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
-    DependsOn:
-      - SigninAlertLambda
-      - PostConfirmationLambda
+#    DependsOn:
+#      - SigninAlertLambda
+#      - PostConfirmationLambda
     Properties:
       UserPoolName: !Sub "PhotoBlogUserPool-${Environment}"
       AdminCreateUserConfig:
@@ -805,7 +805,7 @@ Resources:
   # ===== Lambda Functions: Authentication =====
   PostConfirmationLambda:
     Type: AWS::Serverless::Function
-    DependsOn: PostConfirmationSNSTopic
+#    DependsOn: PostConfirmationSNSTopic
     Properties:
       FunctionName: !Sub "photo-blog-post-confirmation-${Environment}"
       Handler: com.amalitechphotoappcognitoauth.handlers.PostConfirmationHandler::handleRequest

@@ -1,4 +1,4 @@
-package upload;
+package com;
 
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
@@ -13,6 +13,9 @@ import upload.service.ImageService;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Lambda handler for image upload API requests.
+ */
 public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
     private final ImageService imageService;
     private final ObjectMapper objectMapper;
@@ -22,6 +25,9 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
         this.objectMapper = new ObjectMapper();
     }
     
+    /**
+     * Processes API Gateway requests for image uploads.
+     */
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
         Map<String, String> headers = getCorsHeaders();
@@ -33,20 +39,16 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
             
             String body = input.getBody();
             
-            // Parse request
             ImageUploadRequest request = objectMapper.readValue(body, ImageUploadRequest.class);
             
-            // Process upload via service
             ImageUploadResponse response = imageService.processImageUpload(request);
             
-            // Return success response
             return new APIGatewayProxyResponseEvent()
                 .withStatusCode(200)
                 .withHeaders(headers)
                 .withBody(objectMapper.writeValueAsString(response));
                 
         } catch (IllegalArgumentException e) {
-            // Bad request - client error
             Map<String, String> errorResponse = new HashMap<>();
             errorResponse.put("error", e.getMessage());
             
@@ -63,6 +65,9 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
         }
     }
     
+    /**
+     * Creates error response with specified message.
+     */
     private APIGatewayProxyResponseEvent getErrorResponse(Map<String, String> headers, Exception e) {
         Map<String, String> errorResponse = new HashMap<>();
         errorResponse.put("error", e.getMessage());
@@ -80,6 +85,9 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
         }
     }
     
+    /**
+     * Handles OPTIONS requests for CORS.
+     */
     public APIGatewayProxyResponseEvent handleOptions(APIGatewayProxyRequestEvent input, Context context) {
         return new APIGatewayProxyResponseEvent()
             .withStatusCode(200)
@@ -87,6 +95,9 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
             .withBody("");
     }
     
+    /**
+     * Creates CORS headers.
+     */
     private Map<String, String> getCorsHeaders() {
         Map<String, String> headers = new HashMap<>();
         headers.put("Content-Type", "application/json");

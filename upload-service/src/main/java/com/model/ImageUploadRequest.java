@@ -1,5 +1,8 @@
 package upload.model;
 
+/**
+ * Image upload request model.
+ */
 public class ImageUploadRequest {
     private String firstName;
     private String lastName;
@@ -8,8 +11,11 @@ public class ImageUploadRequest {
     private String contentType;
     private String fileExtension;
 
-    // Getters and Setters
+    
+    
     public String getFirstName() { return firstName; }
+    
+    
     public void setFirstName(String firstName) { this.firstName = firstName; }
 
     public String getLastName() { return lastName; }

@@ -250,8 +250,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "${Environment}-upload-image"
-      Handler: image-upload.handler.UploadImageHandler
-      CodeUri: ./
+      CodeUri: upload-service/
+      Handler: com.App::handleRequest
       Environment:
         Variables:
           STAGING_BUCKET: !Ref StagingBucket

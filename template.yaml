@@ -101,7 +101,7 @@ Resources:
     Type: AWS::ApiGateway::Account
     Properties:
       CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchRole.Arn
-    DependsOn: ApiGatewayCloudWatchRole
+  #    DependsOn: ApiGatewayCloudWatchRole
 
   # Main API Gateway for the entire application
   ApiGateway:
@@ -193,7 +193,7 @@ Resources:
                 uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ShareImageFunction.Arn}/invocations"
                 httpMethod: POST
                 type: aws_proxy
-    DependsOn: ApiGatewayAccount
+  #    DependsOn: ApiGatewayAccount
 
   # SSL Certificate for domain
   APICertificate:
@@ -416,9 +416,6 @@ Resources:
   # ===== Cognito Resources =====
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
-    # DependsOn:
-    #   - SigninAlertLambda
-    #   - PostConfirmationLambda
     Properties:
       UserPoolName: !Sub "PhotoBlogUserPool-${Environment}"
       AdminCreateUserConfig:
@@ -686,112 +683,111 @@ Resources:
   #           Method: delete
 
   # ===== Lambda Functions: Authentication =====
-  # PostConfirmationLambda:
-  #   Type: AWS::Serverless::Function
-  #   DependsOn: PostConfirmationSNSTopic
-  #   Properties:
-  #     FunctionName: !Sub "photo-blog-post-confirmation-${Environment}"
-  #     Handler: com.amalitechphotoappcognitoauth.handlers.PostConfirmationHandler::handleRequest
-  #     CodeUri: photo-blog-auth/
-  #     Environment:
-  #       Variables:
-  #         SNS_TOPIC_ARN: !Ref PostConfirmationSNSTopic
-  #         ENVIRONMENT: !Ref Environment
-  #     Policies:
-  #       - Version: '2012-10-17'
-  #         Statement:
-  #           - Effect: Allow
-  #             Action:
-  #               - sns:Publish
-  #             Resource: !GetAtt PostConfirmationSNSTopic.TopicArn
-  #           - Effect: Allow
-  #             Action:
-  #               - logs:CreateLogGroup
-  #               - logs:CreateLogStream
-  #               - logs:PutLogEvents
-  #             Resource: '*'
+  PostConfirmationLambda:
+    Type: AWS::Serverless::Function
+    #    DependsOn: PostConfirmationSNSTopic
+    Properties:
+      FunctionName: !Sub "photo-blog-post-confirmation-${Environment}"
+      Handler: com.amalitechphotoappcognitoauth.handlers.PostConfirmationHandler::handleRequest
+      CodeUri: photo-blog-auth/
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref PostConfirmationSNSTopic
+          ENVIRONMENT: !Ref Environment
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !GetAtt PostConfirmationSNSTopic.TopicArn
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
 
-  # WelcomeEmailLambda:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     FunctionName: !Sub "photo-blog-welcome-email-${Environment}"
-  #     Handler: com.amalitechphotoappcognitoauth.handlers.WelcomeEmailHandler::handleRequest
-  #     CodeUri: photo-blog-auth/
-  #     Timeout: 60
-  #     ReservedConcurrentExecutions: 10
-  #     Environment:
-  #       Variables:
-  #         EMAIL_SOURCE: !Sub "noreply@${EmailDomain}"
-  #         ENVIRONMENT: !Ref Environment
-  #         APP_URL: !Sub "https://${EmailDomain}"
-  #     Policies:
-  #       - Version: '2012-10-17'
-  #         Statement:
-  #           - Effect: Allow
-  #             Action:
-  #               - ses:SendEmail
-  #               - ses:SendRawEmail
-  #               - ses:GetIdentityVerificationAttributes
-  #             Resource: '*'
-  #           - Effect: Allow
-  #             Action:
-  #               - logs:CreateLogGroup
-  #               - logs:CreateLogStream
-  #               - logs:PutLogEvents
-  #             Resource: '*'
-  #     DeadLetterQueue:
-  #       Type: SQS
-  #       TargetArn: !GetAtt WelcomeEmailDLQ.Arn
+  WelcomeEmailLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "photo-blog-welcome-email-${Environment}"
+      Handler: com.amalitechphotoappcognitoauth.handlers.WelcomeEmailHandler::handleRequest
+      CodeUri: photo-blog-auth/
+      Timeout: 60
+      ReservedConcurrentExecutions: 10
+      Environment:
+        Variables:
+          EMAIL_SOURCE: !Sub "noreply@${EmailDomain}"
+          ENVIRONMENT: !Ref Environment
+          APP_URL: !Sub "https://${EmailDomain}"
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+                - ses:GetIdentityVerificationAttributes
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt WelcomeEmailDLQ.Arn
 
-  # VerifyEmailLambda:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     FunctionName: !Sub "photo-blog-verify-email-${Environment}"
-  #     Handler: com.amalitechphotoappcognitoauth.handlers.VerifyEmailHandler::handleRequest
-  #     CodeUri: photo-blog-auth/
-  #     Environment:
-  #       Variables:
-  #         ENVIRONMENT: !Ref Environment
-  #     Policies:
-  #       - Version: '2012-10-17'
-  #         Statement:
-  #           - Effect: Allow
-  #             Action:
-  #               - ses:VerifyEmailIdentity
-  #             Resource: '*'
-  #           - Effect: Allow
-  #             Action:
-  #               - logs:CreateLogGroup
-  #               - logs:CreateLogStream
-  #               - logs:PutLogEvents
-  #             Resource: '*'
+  VerifyEmailLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "photo-blog-verify-email-${Environment}"
+      Handler: com.amalitechphotoappcognitoauth.handlers.VerifyEmailHandler::handleRequest
+      CodeUri: photo-blog-auth/
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:VerifyEmailIdentity
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
 
-  # SigninAlertLambda:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     FunctionName: !Sub "photo-blog-signin-alert-${Environment}"
-  #     Handler: com.amalitechphotoappcognitoauth.handlers.SigninAlertHandler::handleRequest
-  #     CodeUri: photo-blog-auth/
-  #     Environment:
-  #       Variables:
-  #         EMAIL_SOURCE: !Sub "noreply@${EmailDomain}"
-  #         ENVIRONMENT: !Ref Environment
-  #         APP_URL: !Sub "https://${EmailDomain}"
-  #     Policies:
-  #       - Version: '2012-10-17'
-  #         Statement:
-  #           - Effect: Allow
-  #             Action:
-  #               - ses:SendEmail
-  #               - ses:SendRawEmail
-  #             Resource: '*'
-  #           - Effect: Allow
-  #             Action:
-  #               - logs:CreateLogGroup
-  #               - logs:CreateLogStream
-  #               - logs:PutLogEvents
-  #             Resource: '*'
-
+  SigninAlertLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "photo-blog-signin-alert-${Environment}"
+      Handler: com.amalitechphotoappcognitoauth.handlers.SigninAlertHandler::handleRequest
+      CodeUri: photo-blog-auth/
+      Environment:
+        Variables:
+          EMAIL_SOURCE: !Sub "noreply@${EmailDomain}"
+          ENVIRONMENT: !Ref Environment
+          APP_URL: !Sub "https://${EmailDomain}"
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
   # ===== Lambda Functions: Health Check =====
   HealthCheckFunction:
     Type: AWS::Serverless::Function
@@ -900,10 +896,10 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-                - Effect: Allow
-                  Action:
-                    - s3:PutObject
-                  Resource: !Sub "arn:aws:s3:::${StagingBucket}/*"
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub "arn:aws:s3:::${StagingBucket}/*"
         - PolicyName: SQSSendPolicy
           PolicyDocument:
             Version: '2012-10-17'

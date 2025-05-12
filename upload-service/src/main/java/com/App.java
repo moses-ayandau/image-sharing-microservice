@@ -1,48 +1,109 @@
 package com;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.URL;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.stream.Collectors;
-
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import upload.model.ImageUploadRequest;
+import upload.model.ImageUploadResponse;
+import upload.service.ImageService;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
- * Handler for requests to Lambda function.
+ * Lambda handler for image upload API requests.
  */
 public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
-
-    public APIGatewayProxyResponseEvent handleRequest(final APIGatewayProxyRequestEvent input, final Context context) {
-        Map<String, String> headers = new HashMap<>();
-        headers.put("Content-Type", "application/json");
-        headers.put("X-Custom-Header", "application/json");
-
-        APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent()
-                .withHeaders(headers);
+    private final ImageService imageService;
+    private final ObjectMapper objectMapper;
+    
+    public App() {
+        this.imageService = new ImageService();
+        this.objectMapper = new ObjectMapper();
+    }
+    
+    /**
+     * Processes API Gateway requests for image uploads.
+     */
+    @Override
+    public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
+        Map<String, String> headers = getCorsHeaders();
+        
         try {
-            final String pageContents = this.getPageContents("https://checkip.amazonaws.com");
-            String output = String.format("{ \"message\": \"hello world\", \"location\": \"%s\" }", pageContents);
-
-            return response
-                    .withStatusCode(200)
-                    .withBody(output);
-        } catch (IOException e) {
-            return response
-                    .withBody("{}")
-                    .withStatusCode(500);
+            if (input.getHttpMethod().equals("OPTIONS")) {
+                return handleOptions(input, context);
+            }
+            
+            String body = input.getBody();
+            
+            ImageUploadRequest request = objectMapper.readValue(body, ImageUploadRequest.class);
+            
+            ImageUploadResponse response = imageService.processImageUpload(request);
+            
+            return new APIGatewayProxyResponseEvent()
+                .withStatusCode(200)
+                .withHeaders(headers)
+                .withBody(objectMapper.writeValueAsString(response));
+                
+        } catch (IllegalArgumentException e) {
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("error", e.getMessage());
+            
+            try {
+                return new APIGatewayProxyResponseEvent()
+                    .withStatusCode(400)
+                    .withHeaders(headers)
+                    .withBody(objectMapper.writeValueAsString(errorResponse));
+            } catch (Exception ex) {
+                return getErrorResponse(headers, ex);
+            }
+        } catch (Exception e) {
+            return getErrorResponse(headers, e);
         }
     }
-
-    private String getPageContents(String address) throws IOException{
-        URL url = new URL(address);
-        try(BufferedReader br = new BufferedReader(new InputStreamReader(url.openStream()))) {
-            return br.lines().collect(Collectors.joining(System.lineSeparator()));
+    
+    /**
+     * Creates error response with specified message.
+     */
+    private APIGatewayProxyResponseEvent getErrorResponse(Map<String, String> headers, Exception e) {
+        Map<String, String> errorResponse = new HashMap<>();
+        errorResponse.put("error", e.getMessage());
+        
+        try {
+            return new APIGatewayProxyResponseEvent()
+                .withStatusCode(500)
+                .withHeaders(headers)
+                .withBody(objectMapper.writeValueAsString(errorResponse));
+        } catch (Exception ex) {
+            return new APIGatewayProxyResponseEvent()
+                .withStatusCode(500)
+                .withHeaders(headers)
+                .withBody("{\"error\": \"Internal server error\"}");
         }
+    }
+    
+    /**
+     * Handles OPTIONS requests for CORS.
+     */
+    public APIGatewayProxyResponseEvent handleOptions(APIGatewayProxyRequestEvent input, Context context) {
+        return new APIGatewayProxyResponseEvent()
+            .withStatusCode(200)
+            .withHeaders(getCorsHeaders())
+            .withBody("");
+    }
+    
+    /**
+     * Creates CORS headers.
+     */
+    private Map<String, String> getCorsHeaders() {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Content-Type", "application/json");
+        headers.put("Access-Control-Allow-Origin", "*");
+        headers.put("Access-Control-Allow-Methods", "POST, OPTIONS");
+        headers.put("Access-Control-Allow-Headers", "Content-Type,X-Amz-Date,Authorization,X-Api-Key");
+        return headers;
     }
 }

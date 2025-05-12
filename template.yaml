@@ -1,14 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Image recycling bin feature using AWS SAM
-
-Resources:
-  # 🔹 API Gateway
-  ApiGateway:
-    Type: AWS::Serverless::Api
-    Properties:
-      Name: image-recycler-api
-      StageName: Prod
 Description: Integrated Image Processing System with Upload, Processing, Recycling, Authentication, and Health Monitoring
 
 # Parameter section
@@ -110,7 +101,7 @@ Resources:
     Type: AWS::ApiGateway::Account
     Properties:
       CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchRole.Arn
-#    DependsOn: ApiGatewayCloudWatchRole
+  #    DependsOn: ApiGatewayCloudWatchRole
 
   # Main API Gateway for the entire application
   ApiGateway:
@@ -135,8 +126,6 @@ Resources:
         AllowHeaders: "'Content-Type,Authorization'"
         AllowOrigin: "'*'"
         MaxAge: "'3600'"
-      Tags:
-        Environment: "dev"
       MethodSettings:
         - ResourcePath: "/*"
           HttpMethod: "*"
@@ -150,7 +139,6 @@ Resources:
         info:
           title: !Ref 'AWS::StackName'
         paths:
-          /images/{imageId}/delete:
           /upload:
             post:
               x-amazon-apigateway-integration:
@@ -163,30 +151,18 @@ Resources:
                 uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteImageFunction.Arn}/invocations"
                 httpMethod: POST
                 type: aws_proxy
-          /images/{imageId}/restore:
-
           /images/{photoId}/restore:
             post:
               x-amazon-apigateway-integration:
                 uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RecoverImageFunction.Arn}/invocations"
                 httpMethod: POST
                 type: aws_proxy
-          /images/{imageId}/permanent-delete:
-
           /images/{photoId}/permanent-delete:
             delete:
               x-amazon-apigateway-integration:
                 uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PermanentlyDeleteImageFunction.Arn}/invocations"
                 httpMethod: POST
                 type: aws_proxy
-
-  # 🔹 Unified S3 Bucket for Active + Deleted Images
-  ProcessedImageBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-
           /health:
             get:
               x-amazon-apigateway-integration:
@@ -217,7 +193,7 @@ Resources:
                 uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ShareImageFunction.Arn}/invocations"
                 httpMethod: POST
                 type: aws_proxy
-#    DependsOn: ApiGatewayAccount
+  #    DependsOn: ApiGatewayAccount
 
   # SSL Certificate for domain
   APICertificate:
@@ -289,27 +265,6 @@ Resources:
         RestrictPublicBuckets: true
       LifecycleConfiguration:
         Rules:
-          - Id: TransitionToGlacierDeepArchive
-            Prefix: recycle/
-            Status: Enabled
-            Transitions:
-              - StorageClass: DEEP_ARCHIVE
-                TransitionInDays: 1
-            ExpirationInDays: 30
-
-  # 🔹 DynamoDB Table for Image Metadata
-  ImageMetadataTable:
-    Type: AWS::DynamoDB::GlobalTable
-    Properties:
-      Replicas:
-        - Region: eu-central-1
-        - Region: eu-west-1
-      TableName: ImageMetadata
-      AttributeDefinitions:
-        - AttributeName: imageId
-          AttributeType: S
-        - AttributeName: userId
-
           - Id: AutoDeleteAfter30Days
             Prefix: recycle/
             Status: Enabled
@@ -352,12 +307,6 @@ Resources:
         - AttributeName: status
           AttributeType: S
       KeySchema:
-        - AttributeName: imageId
-          KeyType: HASH
-      BillingMode: PAY_PER_REQUEST
-      StreamSpecification:
-        StreamViewType: NEW_AND_OLD_IMAGES
-
         - AttributeName: userId
           KeyType: HASH
         - AttributeName: imageUrl
@@ -380,8 +329,6 @@ Resources:
       TimeToLiveSpecification:
         AttributeName: ttl
         Enabled: true
-
-  # 🔹 Lambda Function: Delete Image (Move to Recycle Bin)
 
   # ===== SQS Queues =====
   RetryQueue:
@@ -469,9 +416,9 @@ Resources:
   # ===== Cognito Resources =====
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
-#    DependsOn:
-#      - SigninAlertLambda
-#      - PostConfirmationLambda
+    #    DependsOn:
+    #      - SigninAlertLambda
+    #      - PostConfirmationLambda
     Properties:
       UserPoolName: !Sub "PhotoBlogUserPool-${Environment}"
       AdminCreateUserConfig:
@@ -659,27 +606,7 @@ Resources:
   # ===== Lambda Functions: Recycle Bin Feature =====
   DeleteImageFunction:
     Type: AWS::Serverless::Function
-    DependsOn:
-        - ProcessedImageBucket
     Properties:
-      FunctionName: image-recycler-delete-function
-      CodeUri: recycle-service/
-      Handler: com.handlers.DeleteImageHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 10
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref ImageMetadataTable
-        - S3CrudPolicy:
-            BucketName: !Ref ProcessedImageBucket
-      Environment:
-        Variables:
-          PRIMARY_BUCKET: !Ref ProcessedImageBucket
-          IMAGE_TABLE: !Ref ImageMetadataTable
-
-  # 🔹 Lambda Function: Restore Image
-
       FunctionName: !Sub "image-delete-function-${Environment}"
       CodeUri: recycle-service/
       Handler: com.handlers.DeleteImageHandler::handleRequest
@@ -707,27 +634,7 @@ Resources:
 
   RecoverImageFunction:
     Type: AWS::Serverless::Function
-    DependsOn:
-        - ProcessedImageBucket
     Properties:
-      FunctionName: image-recycler-recover-function
-      CodeUri: recycle-service/
-      Handler: com.handlers.RecoverImageHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 10
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref ImageMetadataTable
-        - S3CrudPolicy:
-            BucketName: !Ref ProcessedImageBucket
-      Environment:
-        Variables:
-          PRIMARY_BUCKET: !Ref ProcessedImageBucket
-          IMAGE_TABLE: !Ref ImageMetadataTable
-
-  # 🔹 Lambda Function: Permanent Deletion
-
       FunctionName: !Sub "image-recover-function-${Environment}"
       CodeUri: recycle-service/
       Handler: com.handlers.RecoverImageHandler::handleRequest
@@ -755,31 +662,7 @@ Resources:
 
   PermanentlyDeleteImageFunction:
     Type: AWS::Serverless::Function
-    DependsOn:
-        - ProcessedImageBucket
     Properties:
-      FunctionName: image-recycler-permanent-delete-function
-      CodeUri: recycle-service/
-      Handler: com.handlers.PermanentlyDeleteImageHandler::handleRequest
-      Runtime: java21
-      MemorySize: 512
-      Timeout: 10
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref ImageMetadataTable
-        - S3CrudPolicy:
-            BucketName: !Ref ProcessedImageBucket
-      Environment:
-        Variables:
-          IMAGE_TABLE: !Ref ImageMetadataTable
-          PRIMARY_BUCKET: !Ref ProcessedImageBucket
-
-
-  # 🔹 Lambda Permissions for API Gateway
-  DeleteImagePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-
       FunctionName: !Sub "image-permanent-delete-function-${Environment}"
       CodeUri: recycle-service/
       Handler: com.handlers.PermanentlyDeleteImageHandler::handleRequest
@@ -805,7 +688,7 @@ Resources:
   # ===== Lambda Functions: Authentication =====
   PostConfirmationLambda:
     Type: AWS::Serverless::Function
-#    DependsOn: PostConfirmationSNSTopic
+    #    DependsOn: PostConfirmationSNSTopic
     Properties:
       FunctionName: !Sub "photo-blog-post-confirmation-${Environment}"
       Handler: com.amalitechphotoappcognitoauth.handlers.PostConfirmationHandler::handleRequest
@@ -1004,10 +887,10 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-                - Effect: Allow
-                  Action:
-                    - s3:PutObject
-                  Resource: !Sub "arn:aws:s3:::${StagingBucket}/*"
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub "arn:aws:s3:::${StagingBucket}/*"
         - PolicyName: SQSSendPolicy
           PolicyDocument:
             Version: '2012-10-17'
@@ -1068,13 +951,9 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !GetAtt PostConfirmationLambda.Arn
-
       Action: lambda:InvokeFunction
-      FunctionName: !GetAtt DeleteImageFunction.Arn
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/images/{imageId}/delete"
-
-  RecoverImagePermission:
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt CognitoUserPool.Arn
 
   WelcomeEmailLambdaPermissionSNS:
     Type: AWS::Lambda::Permission
@@ -1093,21 +972,12 @@ Resources:
       SourceArn: !Ref PostConfirmationSNSTopic
 
   LambdaInvokePermissionSignin:
-
     Type: AWS::Lambda::Permission
     Properties:
+      FunctionName: !GetAtt SigninAlertLambda.Arn
       Action: lambda:InvokeFunction
-      FunctionName: !GetAtt RecoverImageFunction.Arn
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/images/{imageId}/restore"
-
-  PermanentDeleteImagePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !GetAtt PermanentlyDeleteImageFunction.Arn
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/DELETE/images/{imageId}/permanent-delete"
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt CognitoUserPool.Arn
 
   # ===== Route 53 Health Checks =====
   ApiHealthCheck:
@@ -1414,21 +1284,10 @@ Resources:
       OKActions:
         - !Ref HealthAlertTopic
 
-
 Outputs:
   ApiEndpoint:
     Description: "API Gateway endpoint URL for Prod stage"
     Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
-
-
-  ImageMetadataTableName:
-    Description: Name of the DynamoDB table used for image metadata
-    Value: !Ref ImageMetadataTable
-
-  ProcessedImageBucketName:
-    Description: Name of the S3 bucket used for both active and deleted images
-    Value: !Ref ProcessedImageBucket
-=======
     Export:
       Name: !Sub "${AWS::StackName}-ApiEndpoint"
 
@@ -1479,4 +1338,3 @@ Outputs:
     Value: !Sub "https://${CognitoDomain}.auth.${AWS::Region}.amazoncognito.com"
     Export:
       Name: !Sub "${AWS::StackName}-CognitoDomainName"
-

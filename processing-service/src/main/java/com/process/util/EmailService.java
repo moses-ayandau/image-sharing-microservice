@@ -9,19 +9,14 @@ import java.util.logging.Logger;
 public class EmailService {
 
     private final SesClient sesClient;
-    private final String sourceEmail = "samuel.asante@amalitech.com";
+    private final String sourceEmail = "no-reply@mscv2group1.link";
 
     public EmailService(String regionName) {
         Region region = Region.of(regionName);
         this.sesClient = SesClient.builder().region(region).build();
     }
 
-    /**
-     * Sends an email notification when processing starts
-     *
-     * @param email Recipient email address
-     * @param firstName User's first name
-     */
+
     public void sendProcessingStartEmail(String email, String firstName) {
         String subject = "Your Image is Processing";
         String htmlBody = "<html><body>" +
@@ -34,13 +29,6 @@ public class EmailService {
         sendEmail(email, subject, htmlBody);
     }
 
-    /**
-     * Sends an email notification when processing completes successfully
-     *
-     * @param email Recipient email address
-     * @param firstName User's first name
-     * @param imageKey S3 key of the processed image
-     */
     public void sendProcessingCompleteEmail(String email, String firstName, String imageKey) {
         String subject = "Your Image Processing is Complete";
         String htmlBody = "<html><body>" +
@@ -52,12 +40,6 @@ public class EmailService {
         sendEmail(email, subject, htmlBody);
     }
 
-    /**
-     * Sends an email notification when processing fails
-     *
-     * @param email Recipient email address
-     * @param firstName User's first name
-     */
     public void sendProcessingFailureEmail(String email, String firstName) {
         String subject = "Image Processing Failed";
         String htmlBody = "<html><body>" +
@@ -71,13 +53,7 @@ public class EmailService {
         sendEmail(email, subject, htmlBody);
     }
 
-    /**
-     * Sends an email using Amazon SES
-     *
-     * @param recipient Recipient email address
-     * @param subject Email subject
-     * @param htmlBody Email body in HTML format
-     */
+
     private void sendEmail(String recipient, String subject, String htmlBody) {
         Destination destination = Destination.builder()
                 .toAddresses(recipient)

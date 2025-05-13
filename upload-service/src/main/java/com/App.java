@@ -40,10 +40,10 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
                 throw new IllegalArgumentException("Missing or invalid Authorization token");
             }
             
-            // Extract username from JWT token
+            
             String username = extractUsernameFromToken(token);
             
-            // Extract image data from request
+            
             String imageBase64 = requestJson.has("image") ? requestJson.get("image").asText() : null;
             String contentType = requestJson.has("contentType") ? requestJson.get("contentType").asText() : null;
             
@@ -51,7 +51,6 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
                 throw new IllegalArgumentException("Image data is required");
             }
             
-            // Process the image upload with username as metadata
             Map<String, Object> response = imageService.processImageUpload(username, imageBase64, contentType);
 
             return new APIGatewayProxyResponseEvent()
@@ -78,18 +77,15 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
     
     private String extractUsernameFromToken(String token) {
         try {
-            // JWT tokens are in format: header.payload.signature
             String[] parts = token.split("\\.");
             if (parts.length != 3) {
                 throw new IllegalArgumentException("Invalid JWT token format");
             }
             
-            // Decode the payload (second part)
             String payload = new String(Base64.getUrlDecoder().decode(parts[1]));
             JsonNode payloadJson = objectMapper.readTree(payload);
             
-            // Extract username - adjust the field name based on your JWT structure
-            // Common fields are "sub", "username", "preferred_username", etc.
+
             if (payloadJson.has("username")) {
                 return payloadJson.get("username").asText();
             } else if (payloadJson.has("sub")) {

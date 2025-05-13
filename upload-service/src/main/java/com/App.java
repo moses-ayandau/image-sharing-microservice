@@ -1,21 +1,17 @@
-package com;
+package upload;
 
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import upload.model.ImageUploadRequest;
-import upload.model.ImageUploadResponse;
 import upload.service.ImageService;
-
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Lambda handler for image upload API requests.
- */
 public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
     private final ImageService imageService;
     private final ObjectMapper objectMapper;
@@ -25,9 +21,6 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
         this.objectMapper = new ObjectMapper();
     }
     
-    /**
-     * Processes API Gateway requests for image uploads.
-     */
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
         Map<String, String> headers = getCorsHeaders();
@@ -35,14 +28,32 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
         try {
             if (input.getHttpMethod().equals("OPTIONS")) {
                 return handleOptions(input, context);
+            }    
+            String body = input.getBody();
+            JsonNode requestJson = objectMapper.readTree(body);
+            
+            // Extract JWT token from Authorization header
+            String token = input.getHeaders().get("Authorization");
+            if (token != null && token.startsWith("Bearer ")) {
+                token = token.substring(7); // Remove "Bearer " prefix
+            } else {
+                throw new IllegalArgumentException("Missing or invalid Authorization token");
             }
             
-            String body = input.getBody();
+            // Extract username from JWT token
+            String username = extractUsernameFromToken(token);
             
-            ImageUploadRequest request = objectMapper.readValue(body, ImageUploadRequest.class);
+            // Extract image data from request
+            String imageBase64 = requestJson.has("image") ? requestJson.get("image").asText() : null;
+            String contentType = requestJson.has("contentType") ? requestJson.get("contentType").asText() : null;
             
-            ImageUploadResponse response = imageService.processImageUpload(request);
+            if (imageBase64 == null || imageBase64.isEmpty()) {
+                throw new IllegalArgumentException("Image data is required");
+            }
             
+            // Process the image upload with username as metadata
+            Map<String, Object> response = imageService.processImageUpload(username, imageBase64, contentType);
+
             return new APIGatewayProxyResponseEvent()
                 .withStatusCode(200)
                 .withHeaders(headers)
@@ -54,7 +65,7 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
             
             try {
                 return new APIGatewayProxyResponseEvent()
-                    .withStatusCode(400)
+                    .withStatusCode(400) 
                     .withHeaders(headers)
                     .withBody(objectMapper.writeValueAsString(errorResponse));
             } catch (Exception ex) {
@@ -65,9 +76,34 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
         }
     }
     
-    /**
-     * Creates error response with specified message.
-     */
+    private String extractUsernameFromToken(String token) {
+        try {
+            // JWT tokens are in format: header.payload.signature
+            String[] parts = token.split("\\.");
+            if (parts.length != 3) {
+                throw new IllegalArgumentException("Invalid JWT token format");
+            }
+            
+            // Decode the payload (second part)
+            String payload = new String(Base64.getUrlDecoder().decode(parts[1]));
+            JsonNode payloadJson = objectMapper.readTree(payload);
+            
+            // Extract username - adjust the field name based on your JWT structure
+            // Common fields are "sub", "username", "preferred_username", etc.
+            if (payloadJson.has("username")) {
+                return payloadJson.get("username").asText();
+            } else if (payloadJson.has("sub")) {
+                return payloadJson.get("sub").asText();
+            } else if (payloadJson.has("preferred_username")) {
+                return payloadJson.get("preferred_username").asText();
+            }
+            
+            throw new IllegalArgumentException("Username not found in token");
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Failed to extract username from token: " + e.getMessage());
+        }
+    }
+    
     private APIGatewayProxyResponseEvent getErrorResponse(Map<String, String> headers, Exception e) {
         Map<String, String> errorResponse = new HashMap<>();
         errorResponse.put("error", e.getMessage());
@@ -85,9 +121,6 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
         }
     }
     
-    /**
-     * Handles OPTIONS requests for CORS.
-     */
     public APIGatewayProxyResponseEvent handleOptions(APIGatewayProxyRequestEvent input, Context context) {
         return new APIGatewayProxyResponseEvent()
             .withStatusCode(200)
@@ -95,9 +128,6 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
             .withBody("");
     }
     
-    /**
-     * Creates CORS headers.
-     */
     private Map<String, String> getCorsHeaders() {
         Map<String, String> headers = new HashMap<>();
         headers.put("Content-Type", "application/json");

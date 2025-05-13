@@ -1,4 +1,4 @@
-package upload.repository;
+package com.repository;
 
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;

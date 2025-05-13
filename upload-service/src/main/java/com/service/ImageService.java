@@ -1,4 +1,4 @@
-package upload.service;
+package com.service;
 
 import upload.repository.S3Repository;
 

@@ -9,7 +9,7 @@ import java.util.logging.Logger;
 public class EmailService {
 
     private final SesClient sesClient;
-    private final String sourceEmail = "no-reply@mscv2group1.link";
+    private final String sourceEmail = "no-reply@mscv2group2.link";
 
     public EmailService(String regionName) {
         Region region = Region.of(regionName);

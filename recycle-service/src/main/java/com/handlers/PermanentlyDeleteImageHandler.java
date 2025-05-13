@@ -19,8 +19,17 @@ public class PermanentlyDeleteImageHandler implements RequestHandler<APIGatewayP
     private final String tableName = System.getenv("IMAGE_TABLE");
     private final String bucketName = System.getenv("PRIMARY_BUCKET");
 
-    private final S3Utils s3Utils = new S3Utils();
-    private final DynamoDBUtils dynamoUtils = new DynamoDBUtils();
+    private  S3Utils s3Utils = new S3Utils();
+    private  DynamoDBUtils dynamoUtils = new DynamoDBUtils();
+
+    public PermanentlyDeleteImageHandler() {
+        this(new S3Utils(), new DynamoDBUtils());
+    }
+
+    public PermanentlyDeleteImageHandler(S3Utils s3Utils, DynamoDBUtils dynamoUtils) {
+        this.s3Utils = s3Utils;
+        this.dynamoUtils = dynamoUtils;
+    }
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {

@@ -36,7 +36,7 @@ public class ResponseUtils {
 
     public static APIGatewayProxyResponseEvent errorResponse(int statusCode, String message) {
         Map<String, String> errorBody = new HashMap<>();
-        errorBody.put("error", message);
+        errorBody.put("message", message);
 
         try {
             return createResponse()
@@ -46,7 +46,7 @@ public class ResponseUtils {
             // Fallback if JSON serialization fails
             return createResponse()
                     .withStatusCode(statusCode)
-                    .withBody("{\"error\":\"" + message + "\"}");
+                    .withBody("{\"message\":\"" + message + "\"}");
         }
     }
 
@@ -58,7 +58,7 @@ public class ResponseUtils {
     // Method added for testing purposes - simulates errorResponse but allows overriding serialization
     protected APIGatewayProxyResponseEvent customErrorResponse(int statusCode, String message) {
         Map<String, String> errorBody = new HashMap<>();
-        errorBody.put("error", message);
+        errorBody.put("message", message);
 
         try {
             return createResponse()
@@ -68,7 +68,7 @@ public class ResponseUtils {
             // Fallback if JSON serialization fails
             return createResponse()
                     .withStatusCode(statusCode)
-                    .withBody("{\"error\":\"" + message + "\"}");
+                    .withBody("{\"message\":\"" + message + "\"}");
         }
     }
 }

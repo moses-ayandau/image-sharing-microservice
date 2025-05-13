@@ -50,7 +50,9 @@ public class ProcessImage {
 
             // Store image metadata in DynamoDB
             context.getLogger().log("Storing image metadata in DynamoDB");
-            dynamoDbService.storeImageMetadata(userId, processedKey, firstName, lastName);
+            String imageUrl = "https://" + System.getenv("PROCESSED_BUCKET")+ ".s3." + System.getenv("AWS_REGION") + ".amazonaws.com/" + processedKey;
+
+            dynamoDbService.storeImageMetadata(userId, processedKey, firstName, lastName, imageUrl);
 
             // Delete the original image from the staging bucket
             context.getLogger().log("Deleting original image from staging bucket");
@@ -61,10 +63,12 @@ public class ProcessImage {
             if (email != null && !email.trim().isEmpty()) {
                 try {
                     emailService.sendProcessingCompleteEmail(email, firstName, processedKey);
+                    context.getLogger().log("Email sent to the receiver");
                 } catch (Exception e) {
                     context.getLogger().log("Failed to send email: " + e.getMessage());
                     // Continue processing even if email fails
                 }
+
             }
 
             context.getLogger().log("Successfully processed image: " + key);

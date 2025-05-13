@@ -4,10 +4,12 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.ses.SesClient;
 import software.amazon.awssdk.services.ses.model.*;
 
+import java.util.logging.Logger;
+
 public class EmailService {
 
     private final SesClient sesClient;
-    private final String sourceEmail = "noreply@mscv2group1.link";
+    private final String sourceEmail = "samuel.asante@amalitech.com";
 
     public EmailService(String regionName) {
         Region region = Region.of(regionName);
@@ -103,6 +105,10 @@ public class EmailService {
                 .destination(destination)
                 .message(message)
                 .build();
+
+        Logger.getAnonymousLogger().info(sendEmailRequest.destination().toString());
+        Logger.getAnonymousLogger().info(sourceEmail.toString());
+        Logger.getAnonymousLogger().info(message.toString());
 
         sesClient.sendEmail(sendEmailRequest);
     }

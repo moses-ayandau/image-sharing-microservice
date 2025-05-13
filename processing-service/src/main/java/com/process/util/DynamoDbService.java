@@ -32,7 +32,7 @@ public class DynamoDbService {
      * @param firstName The user's first name
      * @param lastName  The user's last name
      */
-    public void storeImageMetadata(String userId, String imageKey, String firstName, String lastName) {
+    public void storeImageMetadata(String userId, String imageKey, String firstName, String lastName, String imageUrl) {
         try {
             // Create item attributes
             Map<String, AttributeValue> item = new HashMap<>();
@@ -45,6 +45,8 @@ public class DynamoDbService {
             item.put("firstName", AttributeValue.builder().s(firstName).build());
             item.put("lastName", AttributeValue.builder().s(lastName).build());
             item.put("processedDate", AttributeValue.builder().s(Instant.now().toString()).build());
+            item.put("imageUrl", AttributeValue.builder().s(imageUrl).build());
+
 
             // Set TTL for 30 days (if used)
             long ttl = Instant.now().plus(30, ChronoUnit.DAYS).getEpochSecond();

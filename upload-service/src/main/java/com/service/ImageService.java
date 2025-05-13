@@ -51,7 +51,7 @@ public class ImageService {
         // Create response
         Map<String, Object> response = new HashMap<>();
         response.put("url", fileUrl);
-        response.put("message", "Image uploaded successfully");
+        response.put("message", "Image uploaded Successfully");
         
         return response;
     }

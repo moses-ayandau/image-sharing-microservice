@@ -568,9 +568,9 @@ Resources:
           AttributeDataType: String
           Mutable: true
           Required: true
-      LambdaConfig:
-        PostConfirmation: !GetAtt PostConfirmationLambda.Arn
-        PostAuthentication: !GetAtt SigninAlertLambda.Arn
+      # LambdaConfig:
+      #   PostConfirmation: !GetAtt PostConfirmationLambda.Arn
+      #   PostAuthentication: !GetAtt SigninAlertLambda.Arn
       AccountRecoverySetting:
         RecoveryMechanisms:
           - Priority: 1
@@ -885,17 +885,16 @@ Resources:
   WelcomeEmailLambda:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub photo-App-welcome-email-${Environment}
+      FunctionName: !Sub "photo-blog-welcome-email-${Environment}"
       Handler: com.amalitechphotoappcognitoauth.handlers.WelcomeEmailHandler::handleRequest
-      Runtime: java21
-      CodeUri: photo-blog-auth/
-      MemorySize: 512
-      Timeout: 30
+      CodeUri: cognito-service/
+      Timeout: 60
+      ReservedConcurrentExecutions: 10
       Environment:
         Variables:
-          EMAIL_SOURCE: "noreply@mscv2group2.link"
+          EMAIL_SOURCE: !Sub "noreply@${EmailDomain}"
           ENVIRONMENT: !Ref Environment
-          APP_URL: !Sub https://mscv2group2.link
+          APP_URL: !Sub "https://${EmailDomain}"
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -903,6 +902,33 @@ Resources:
               Action:
                 - ses:SendEmail
                 - ses:SendRawEmail
+                - ses:GetIdentityVerificationAttributes
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt WelcomeEmailDLQ.Arn
+
+  VerifyEmailLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "photo-blog-verify-email-${Environment}"
+      Handler: com.amalitechphotoappcognitoauth.handlers.VerifyEmailHandler::handleRequest
+      CodeUri: cognito-service/
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:VerifyEmailIdentity
               Resource: '*'
             - Effect: Allow
               Action:
@@ -914,17 +940,14 @@ Resources:
   SigninAlertLambda:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub photo-App-signin-alert-${Environment}
+      FunctionName: !Sub "photo-blog-signin-alert-${Environment}"
       Handler: com.amalitechphotoappcognitoauth.handlers.SigninAlertHandler::handleRequest
-      Runtime: java21
-      CodeUri: photo-blog-auth/
-      MemorySize: 512
-      Timeout: 30
+      CodeUri: cognito-service/
       Environment:
         Variables:
-          EMAIL_SOURCE: "noreply@mscv2group2.link"
+          EMAIL_SOURCE: !Sub "noreply@${EmailDomain}"
           ENVIRONMENT: !Ref Environment
-          APP_URL: !Sub https://mscv2group2.link
+          APP_URL: !Sub "https://${EmailDomain}"
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -1007,7 +1030,7 @@ Resources:
                 - s3:GetBucketVersioning
                 - s3:GetBucketTagging
                 - s3:ListBucket
-              Resource:
+              Resource: 
                 - !Sub "arn:aws:s3:::${ProcessedBucket}"
                 - !Sub "arn:aws:s3:::${ProcessedBucket}/*"
             - Effect: Allow
@@ -1107,21 +1130,37 @@ Resources:
                 Resource: "*"
 
   # ===== Lambda Permissions =====
-  LambdaInvokePermissionWelcome:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !GetAtt WelcomeEmailLambda.Arn
-      Action: lambda:InvokeFunction
-      Principal: cognito-idp.amazonaws.com
-      SourceArn: !GetAtt CognitoUserPool.Arn
+  # LambdaInvokePermission:
+  #   Type: AWS::Lambda::Permission
+  #   Properties:
+  #     FunctionName: !GetAtt PostConfirmationLambda.Arn
+  #     Action: lambda:InvokeFunction
+  #     Principal: cognito-idp.amazonaws.com
+  #     SourceArn: !GetAtt CognitoUserPool.Arn
 
-  LambdaInvokePermissionSignin:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !GetAtt SigninAlertLambda.Arn
-      Action: lambda:InvokeFunction
-      Principal: cognito-idp.amazonaws.com
-      SourceArn: !GetAtt CognitoUserPool.Arn
+  # WelcomeEmailLambdaPermissionSNS:
+  #   Type: AWS::Lambda::Permission
+  #   Properties:
+  #     Action: lambda:InvokeFunction
+  #     FunctionName: !GetAtt WelcomeEmailLambda.Arn
+  #     Principal: sns.amazonaws.com
+  #     SourceArn: !Ref PostConfirmationSNSTopic
+
+  # VerifyEmailLambdaPermissionSNS:
+  #   Type: AWS::Lambda::Permission
+  #   Properties:
+  #     Action: lambda:InvokeFunction
+  #     FunctionName: !GetAtt VerifyEmailLambda.Arn
+  #     Principal: sns.amazonaws.com
+  #     SourceArn: !Ref PostConfirmationSNSTopic
+
+  # LambdaInvokePermissionSignin:
+  #   Type: AWS::Lambda::Permission
+  #   Properties:
+  #     FunctionName: !GetAtt SigninAlertLambda.Arn
+  #     Action: lambda:InvokeFunction
+  #     Principal: cognito-idp.amazonaws.com
+  #     SourceArn: !GetAtt CognitoUserPool.Arn
 
   # ===== Route 53 Health Checks =====
   ApiHealthCheck:

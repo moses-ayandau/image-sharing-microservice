@@ -64,7 +64,7 @@ public class PermanentlyDeleteImageHandler implements RequestHandler<APIGatewayP
             s3Utils.deleteObject(bucketName, key);
             dynamoUtils.deleteRecordFromDynamo(tableName, imageId);
 
-            return ResponseUtils.successResponse(200, Map.of("message","Image permanently deleted") + imageId);
+            return ResponseUtils.successResponse(200, Map.of("message","Image permanently deleted"));
 
         } catch (Exception e) {
             context.getLogger().log("Error permanently deleting image: " + e.getMessage());

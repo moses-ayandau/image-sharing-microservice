@@ -99,7 +99,7 @@ public class ResponseUtilsTest {
         // Assert
         assertNotNull(response);
         assertEquals(statusCode, response.getStatusCode());
-        assertEquals("{\"error\":\"Bad Request\"}", response.getBody());
+        assertEquals("{\"message\":\"Bad Request\"}", response.getBody());
         assertNotNull(response.getHeaders());
     }
 

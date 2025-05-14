@@ -1,0 +1,68 @@
+package com.handlers;
+
+import com.amazonaws.services.lambda.runtime.Context;
+import com.amazonaws.services.lambda.runtime.RequestHandler;
+import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
+import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.utils.DynamoDBUtils;
+import com.utils.ResponseUtils;
+import com.utils.S3Utils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+
+import java.util.Map;
+
+public class RecoverImageHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
+    private final String tableName = System.getenv("IMAGE_TABLE");
+    private final String bucketName = System.getenv("PRIMARY_BUCKET");
+
+    private static final Log log = LogFactory.getLog(RecoverImageHandler.class);
+
+
+    private static final ObjectMapper mapper = new ObjectMapper();
+    private final S3Utils s3Utils = new S3Utils();
+    private final DynamoDBUtils dynamoUtils = new DynamoDBUtils();
+
+    @Override
+    public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent request, Context context) {
+        String imageId;
+        String userId;
+        if (request == null || request.getBody() == null || request.getBody().isEmpty()) {
+            return ResponseUtils.errorResponse(400, "Invalid request");
+        }
+        userId = request.getHeaders().get("userId");
+        if (userId == null || userId.isEmpty()) {
+            return ResponseUtils.errorResponse(400, "Missing userId header");
+        }
+
+        try {
+            JsonNode bodyJson = mapper.readTree(request.getBody());
+            imageId = bodyJson.get("imageId").asText();
+            if (imageId == null || imageId.isEmpty()) {
+                return ResponseUtils.errorResponse(400, "Missing imageId");
+            }
+
+            String originalKey = "main/" + userId + "/" + imageId;
+            String recycleKey = "recycle/" + userId + "/" + imageId;
+
+            log.info("Original Key: "+ originalKey);
+            log.info("recycle key: " + recycleKey);
+
+            Map<String, AttributeValue> item = dynamoUtils.getItemFromDynamo(tableName, imageId);
+            s3Utils.validateOwnership(item, userId);
+
+            s3Utils.copyObject(bucketName, recycleKey, originalKey);
+            s3Utils.deleteObject(bucketName, recycleKey);
+
+            dynamoUtils.updateImageStatus(tableName, imageId, "active");
+            dynamoUtils.updateS3Key(tableName, imageId, originalKey);
+            return ResponseUtils.successResponse(200, Map.of("message", "Image recovered: " + imageId));
+        } catch (Exception e) {
+            log.error("Failed to recover image: " + e.getMessage(), e);
+            return ResponseUtils.errorResponse(500, "Recovery failed: " + e.getMessage());
+        }
+    }
+}

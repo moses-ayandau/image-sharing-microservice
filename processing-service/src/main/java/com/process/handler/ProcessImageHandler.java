@@ -3,19 +3,14 @@ package com.process.handler;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.SQSEvent;
-import com.process.util.DynamoDbService;
-import com.process.util.EmailService;
-import com.process.util.ImageProcessor;
-import com.process.util.S3Service;
+import com.process.util.*;
 
 public class ProcessImageHandler implements RequestHandler<SQSEvent, String> {
 
     private final S3Service s3Service;
-    private final DynamoDbService dynamoDbService;
-    private final EmailService emailService;
-    private final ImageProcessor imageProcessor;
-    private final String stagingBucket;
+    private final ProcessImage processImage;
 
+    private final String stagingBucket;
     public ProcessImageHandler() {
         String region = System.getenv("AWS_REGION");
         this.stagingBucket = System.getenv("STAGING_BUCKET");
@@ -23,15 +18,30 @@ public class ProcessImageHandler implements RequestHandler<SQSEvent, String> {
         String imageTable = System.getenv("IMAGE_TABLE");
 
         this.s3Service = new S3Service(region, processedBucket);
-        this.dynamoDbService = new DynamoDbService(region, imageTable);
-        this.emailService = new EmailService(region);
-        this.imageProcessor = new ImageProcessor();
+        DynamoDbService dynamoDbService = new DynamoDbService(region, imageTable);
+        EmailService emailService = new EmailService(region);
+        ImageProcessor imageProcessor = new ImageProcessor();
+
+        this.processImage = new ProcessImage(s3Service, dynamoDbService, emailService, imageProcessor);
+    }
+
+    public ProcessImageHandler(ProcessImage processImage) {
+        this.processImage = processImage;
+        String region = System.getenv("AWS_REGION");
+        this.stagingBucket = System.getenv("STAGING_BUCKET");
+        String processedBucket = System.getenv("PROCESSED_BUCKET");
+        String imageTable = System.getenv("IMAGE_TABLE");
+
+        this.s3Service = new S3Service(region, processedBucket);
+
     }
 
     @Override
     public String handleRequest(SQSEvent sqsEvent, Context context) {
+        context.getLogger().log("Starting to process " + sqsEvent.getRecords().size() + " messages");
+
         for (SQSEvent.SQSMessage message : sqsEvent.getRecords()) {
-            context.getLogger().log("Processing retry message: " + message.getBody());
+            context.getLogger().log("Processing message: " + message.getBody());
 
             try {
                 // Parse the message
@@ -48,46 +58,32 @@ public class ProcessImageHandler implements RequestHandler<SQSEvent, String> {
                 String firstName = parts[4];
                 String lastName = parts[5];
 
+                // Log all parts for debugging
+                context.getLogger().log("Message parts:");
+                context.getLogger().log("  Bucket: " + bucket);
+                context.getLogger().log("  Key: " + key);
+                context.getLogger().log("  UserId: " + userId);
+                context.getLogger().log("  Email: " + email);
+                context.getLogger().log("  FirstName: " + firstName);
+                context.getLogger().log("  LastName: " + lastName);
+
                 // Check if the original file still exists
                 if (!s3Service.objectExists(bucket, key)) {
                     context.getLogger().log("Original file no longer exists: " + bucket + "/" + key);
                     continue;
                 }
 
-                // Process the image again
-                byte[] imageData = s3Service.getImageFromS3(bucket, key);
-                byte[] watermarkedImage = imageProcessor.addWatermark(imageData, firstName, lastName);
+                // Process the image
+                processImage.processImage(context, bucket, key, userId, email, firstName, lastName, s3Service);
 
-                if (watermarkedImage != null) {
-                    // Generate a unique ID for the processed image
-                    String processedKey = "processed/" + java.util.UUID.randomUUID() + "-" +
-                            key.substring(key.lastIndexOf("/") + 1);
-
-                    // Upload the processed image to the processed bucket
-                    s3Service.uploadToProcessedBucket(watermarkedImage, processedKey);
-
-                    // Store image metadata in DynamoDB
-                    dynamoDbService.storeImageMetadata(userId, processedKey, firstName, lastName);
-
-                    // Delete the original image from the staging bucket
-                    s3Service.deleteFromStagingBucket(bucket, key);
-
-                    // Send completion email
-                    emailService.sendProcessingCompleteEmail(email, firstName, processedKey);
-
-                    context.getLogger().log("Retry successful for image: " + key);
-                } else {
-                    throw new RuntimeException("Failed to process image on retry: " + key);
-                }
             } catch (Exception e) {
-                context.getLogger().log("Retry failed: " + e.getMessage());
-
-                // We could add another retry here, but for simplicity, we'll just log the error
-                // In a production environment, you'd want to implement a more sophisticated retry strategy
-                // or move the message to a dead-letter queue after several retries
+                context.getLogger().log("Error processing message: " + e.getMessage());
+                // In production, consider re-queueing with a backoff or moving to DLQ
             }
         }
 
-        return "Retry processing complete";
+        return "Processing complete";
     }
+
+
 }

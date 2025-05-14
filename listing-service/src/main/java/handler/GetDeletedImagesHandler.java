@@ -21,12 +21,10 @@ public class GetDeletedImagesHandler implements RequestHandler<APIGatewayProxyRe
 
     public APIGatewayProxyResponseEvent handleRequest(final APIGatewayProxyRequestEvent input, final Context context) {
         try {
-            Map<String, String> queryParams = input.getQueryStringParameters();
-            if (queryParams == null || !queryParams.containsKey("userId")) {
+            String userId = input.getPathParameters().get("userId");
+            if (userId == null) {
                 return ResponseUtils.errorResponse("User ID is required", 400);
             }
-            
-            String userId = queryParams.get("userId");
 
             List<Map<String, AttributeValue>> items = DynamoDBService.getDeletedImages(userId);
             

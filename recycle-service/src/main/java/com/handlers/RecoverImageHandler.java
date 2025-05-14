@@ -21,26 +21,24 @@ public class RecoverImageHandler implements RequestHandler<APIGatewayProxyReques
 
     private static final Log log = LogFactory.getLog(RecoverImageHandler.class);
 
+
+    private final ObjectMapper mapper;
     private final S3Utils s3Utils;
-    private final  DynamoDBUtils dynamoDBUtils;
-    private final  ObjectMapper objectMapper;
+    private final DynamoDBUtils dynamoUtils;
 
     public RecoverImageHandler(){
         this.s3Utils = new S3Utils();
-        this.dynamoDBUtils = new DynamoDBUtils();
-        this.objectMapper = new ObjectMapper();
-
+        this.dynamoUtils = new DynamoDBUtils();
+        this.mapper = new ObjectMapper();
     }
 
-    //for testing
-    public RecoverImageHandler(String tableName, String bucketName, S3Utils s3Utils, DynamoDBUtils dynamoDBUtils, ObjectMapper objectMapper){
+    public RecoverImageHandler(String tableName, String bucketName, S3Utils s3Utils, DynamoDBUtils dynamoUtils, ObjectMapper mapper) {
+        this.s3Utils = s3Utils;
+        this.dynamoUtils = dynamoUtils;
+        this.mapper = mapper;
         this.tableName = tableName;
         this.bucketName = bucketName;
-        this.s3Utils = s3Utils;
-        this.dynamoDBUtils = dynamoDBUtils;
-        this.objectMapper = objectMapper;
     }
-
 
 
     @Override
@@ -56,26 +54,26 @@ public class RecoverImageHandler implements RequestHandler<APIGatewayProxyReques
         }
 
         try {
-            JsonNode bodyJson = objectMapper.readTree(request.getBody());
-            JsonNode imageIdNode = bodyJson.get("imageId");
-            if (imageIdNode == null || imageIdNode.isEmpty()) {
+            JsonNode bodyJson = mapper.readTree(request.getBody());
+            imageId = bodyJson.get("imageId").asText();
+            if (imageId == null || imageId.isEmpty()) {
                 return ResponseUtils.errorResponse(400, "Missing imageId");
             }
-
-            imageId  = imageIdNode.asText();
 
             String originalKey = "main/" + userId + "/" + imageId;
             String recycleKey = "recycle/" + userId + "/" + imageId;
 
+            log.info("Original Key: " + originalKey);
+            log.info("recycle key: " + recycleKey);
 
-            Map<String, AttributeValue> item = dynamoDBUtils.getItemFromDynamo(tableName, imageId);
+            Map<String, AttributeValue> item = dynamoUtils.getItemFromDynamo(tableName, imageId);
             s3Utils.validateOwnership(item, userId);
 
             s3Utils.copyObject(bucketName, recycleKey, originalKey);
             s3Utils.deleteObject(bucketName, recycleKey);
 
-            dynamoDBUtils.updateImageStatus(tableName, imageId, "active");
-            dynamoDBUtils.updateS3Key(tableName, imageId, originalKey);
+            dynamoUtils.updateImageStatus(tableName, imageId, "active");
+            dynamoUtils.updateS3Key(tableName, imageId, originalKey);
             return ResponseUtils.successResponse(200, Map.of("message", "Image recovered: " + imageId));
         } catch (Exception e) {
             log.error("Failed to recover image: " + e.getMessage(), e);

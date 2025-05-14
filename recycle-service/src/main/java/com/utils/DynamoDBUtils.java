@@ -1,8 +1,6 @@
 package com.utils;
 
 import com.factories.AwsFactory;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.*;
 
@@ -11,7 +9,6 @@ import java.util.Map;
 
 public class DynamoDBUtils {
 
-    private static final Log log = LogFactory.getLog(DynamoDBUtils.class);
     public static final String IMAGE_ID = "imageId";
     private final DynamoDbClient dynamoDbClient;
 
@@ -22,7 +19,6 @@ public class DynamoDBUtils {
 
 
     public Map<String, AttributeValue> getItemFromDynamo(String tableName, String imageId) {
-        log.info(tableName);
         GetItemRequest request = GetItemRequest.builder()
                 .tableName(tableName)
                 .key(Map.of(IMAGE_ID, AttributeValue.fromS(imageId)))

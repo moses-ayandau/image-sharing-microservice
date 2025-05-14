@@ -7,13 +7,10 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import com.utils.DynamoDBUtils;
 import com.utils.ResponseUtils;
 import com.utils.S3Utils;
-
-import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
 import java.util.Map;
 
-@Slf4j
 public class PermanentlyDeleteImageHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
     public static final String S_3_KEY = "S3Key";
     private final String tableName = System.getenv("IMAGE_TABLE");

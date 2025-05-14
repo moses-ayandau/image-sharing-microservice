@@ -2,8 +2,6 @@ package com.utils;
 
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
 import com.factories.AwsFactory;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.s3.S3Client;
 
@@ -27,8 +25,8 @@ public class S3Utils {
                 .key(key));
     }
 
-    public APIGatewayProxyResponseEvent validateOwnership(Map<String, AttributeValue> item, String ownerId) {
-        if (!item.containsKey("userId") || !item.get("userId").s().equals(ownerId)) {
+    public APIGatewayProxyResponseEvent validateOwnership(Map<String, AttributeValue> item, String userId) {
+        if (!item.containsKey("userId") || !item.get("userId").s().equals(userId)) {
             ResponseUtils.errorResponse(403, "User not authorized to delete this image");
         }
         return null;

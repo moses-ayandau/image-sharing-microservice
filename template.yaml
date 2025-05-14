@@ -135,7 +135,8 @@ Resources:
         AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
         AllowOrigin: "'*'"
         MaxAge: "'3600'"
-      AddDefaultAuthorizerToCorsPreflight: false
+      Auth:
+        AddDefaultAuthorizerToCorsPreflight: false
       MethodSettings:
         - ResourcePath: "/*"
           HttpMethod: "*"

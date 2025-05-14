@@ -714,7 +714,7 @@ Resources:
       FunctionName: !Sub photo-App-welcome-email-${Environment}
       Handler: com.amalitechphotoappcognitoauth.handlers.WelcomeEmailHandler::handleRequest
       Runtime: java21
-      CodeUri: photo-blog-auth/
+      CodeUri: cognito-service/
       MemorySize: 512
       Timeout: 30
       Environment:
@@ -743,7 +743,7 @@ Resources:
       FunctionName: !Sub photo-App-signin-alert-${Environment}
       Handler: com.amalitechphotoappcognitoauth.handlers.SigninAlertHandler::handleRequest
       Runtime: java21
-      CodeUri: photo-blog-auth/
+      CodeUri: cognito-service/
       MemorySize: 512
       Timeout: 30
       Environment:

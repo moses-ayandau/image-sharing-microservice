@@ -30,7 +30,7 @@ Parameters:
 
   AdminEmail:
     Type: String
-    Default: @nicholas.oppong@amalitech.com
+    Default: nicholas.oppong@amalitech.com
     Description: Email address to receive health check notifications
 
   HealthCheckPath:

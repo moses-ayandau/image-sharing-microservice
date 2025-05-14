@@ -5,7 +5,6 @@ import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
 
-import constants.constants;
 import factories.DynamodbFactory;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.*;
@@ -27,7 +26,7 @@ public class GetActiveImagesHandler implements RequestHandler<APIGatewayProxyReq
 
     public GetActiveImagesHandler() {
         this.dynamoDbClient = DynamodbFactory.createClient();
-        this.tableName = constants.IMAGE_TABLE;
+        this.tableName = System.getenv("IMAGE_TABLE");
     }
 
     public APIGatewayProxyResponseEvent handleRequest(final APIGatewayProxyRequestEvent input, final Context context) {

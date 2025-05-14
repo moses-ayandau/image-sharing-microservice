@@ -715,6 +715,7 @@ Resources:
       CodeUri: listing-service/
       Environment:
         Variables:
+          PROCESSED_IMAGES_BUCKET: !Ref ProcessedBucket
           IMAGE_TABLE: !Ref ImageTableName
       Policies:
         - DynamoDBReadPolicy:
@@ -737,6 +738,7 @@ Resources:
       CodeUri: listing-service/
       Environment:
         Variables:
+          PROCESSED_IMAGES_BUCKET: !Ref ProcessedBucket
           IMAGE_TABLE: !Ref ImageTableName
       Policies:
         - DynamoDBReadPolicy:
@@ -759,7 +761,8 @@ Resources:
       CodeUri: listing-service/
       Environment:
         Variables:
-          PROCESSED_BUCKET: !Ref ProcessedBucket
+          PROCESSED_IMAGES_BUCKET: !Ref ProcessedBucket
+          IMAGE_TABLE: !Ref ImageTableName
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref ProcessedBucket

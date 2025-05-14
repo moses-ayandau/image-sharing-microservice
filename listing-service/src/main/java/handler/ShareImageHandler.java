@@ -41,8 +41,8 @@ public class ShareImageHandler implements RequestHandler<APIGatewayProxyRequestE
                 .build();
         this.dynamoDbClient = DynamodbFactory.createClient();
         this.objectMapper = new ObjectMapper();
-        this.bucketName = constants.PROCESSED_IMAGES_BUCKET;
-        this.tableName = constants.IMAGE_TABLE;
+        this.bucketName = System.getenv("PROCESSED_IMAGES_BUCKET");
+        this.tableName = System.getenv("IMAGE_TABLE");
     }
     
     @Override

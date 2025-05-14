@@ -24,6 +24,7 @@ out/
 samconfig.toml.bak
 packaged.yaml
 .serverless/
+.idea
 
 # Logs
 logs/

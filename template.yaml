@@ -67,6 +67,14 @@ Parameters:
     Default: Z07888711CCI43RK69LKQ
     Description: Route 53 Hosted Zone ID
 
+  DestinationRegion:
+    Type: String
+    Default: us-west-2
+
+  ReplicaRegions:
+    Type: CommaDelimitedList
+    Default: us-west-2, eu-west-1
+
 Globals:
   Function:
     Timeout: 30
@@ -238,6 +246,8 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "image-processed-bucket-${Environment}-${AWS::AccountId}"
+      VersioningConfiguration:
+        Status: Enabled  # Enable versioning
       CorsConfiguration:
         CorsRules:
           - AllowedHeaders:
@@ -253,6 +263,89 @@ Resources:
         IgnorePublicAcls: true
         BlockPublicPolicy: true
         RestrictPublicBuckets: true
+      ReplicationConfiguration:
+        Role: !GetAtt S3ReplicationRole.Arn
+        Rules:
+          - Id: ReplicationRule1
+            Status: Enabled
+            Priority: 1
+            Destination:
+              Bucket: !GetAtt DestinationBucket.Arn
+            DeleteMarkerReplication:
+              Status: Disabled
+            Filter:
+              Prefix: ""  # Replicate all objects; modify if needed
+
+  DestinationBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "image-processed-replica-${Environment}-${AWS::AccountId}"
+      VersioningConfiguration:
+        Status: Enabled  # Enable versioning
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+  S3ReplicationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3ReplicationPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObjectVersion
+                  - s3:GetObjectVersionAcl
+                  - s3:GetObjectVersionTagging
+                Resource: !Sub "arn:aws:s3:::image-processed-bucket-${Environment}-${AWS::AccountId}/*"
+              - Effect: Allow
+                Action:
+                  - s3:ReplicateObject
+                  - s3:ReplicateTags
+                  - s3:ReplicateDelete
+                Resource: !Sub "arn:aws:s3:::image-processed-replica-${Environment}-${AWS::AccountId}/*"
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketVersioning
+                  - s3:PutBucketVersioning
+                Resource:
+                  - !Sub "arn:aws:s3:::image-processed-bucket-${Environment}-${AWS::AccountId}"
+                  - !Sub "arn:aws:s3:::image-processed-replica-${Environment}-${AWS::AccountId}"
+
+  DestinationBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DestinationBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !GetAtt S3ReplicationRole.Arn
+            Action:
+              - s3:ReplicateObject
+              - s3:ReplicateTags
+              - s3:ReplicateDelete
+            Resource: !Sub "arn:aws:s3:::image-processed-replica-${Environment}-${AWS::AccountId}/*"
+          - Effect: Allow
+            Principal:
+              AWS: !GetAtt S3ReplicationRole.Arn
+            Action:
+              - s3:ListBucket
+              - s3:GetBucketVersioning
+            Resource: !Sub "arn:aws:s3:::image-processed-replica-${Environment}-${AWS::AccountId}"
 
   RecycleBinBucket:
     Type: AWS::S3::Bucket
@@ -329,6 +422,9 @@ Resources:
       TimeToLiveSpecification:
         AttributeName: ttl
         Enabled: true
+
+
+
 
   # ===== SQS Queues =====
   RetryQueue:

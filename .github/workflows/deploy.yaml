@@ -1,0 +1,64 @@
+name: Deploy SAM Stack
+
+on:
+  push:
+    branches: [ dev ]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  STACK_NAME: Photo-Blog-App
+  ARTIFACT_BUCKET: photo-blog-artifacts-${{ github.run_id }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'corretto'
+          java-version: '21'
+          cache: 'maven'
+
+      - name: Setup AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build SAM Application
+        run: |
+#          cd TaskManager
+#          mvn clean package
+#          cd ..
+          sam build
+
+      - name: Create S3 Bucket for Artifacts
+        run: |
+          aws s3 mb s3://${{ env.ARTIFACT_BUCKET }} || true
+          aws s3api put-bucket-versioning --bucket ${{ env.ARTIFACT_BUCKET }} --versioning-configuration Status=Enabled
+
+      - name: Deploy SAM Application
+        run: |
+          sam deploy \
+            --stack-name ${{ env.STACK_NAME }} \
+            --s3-bucket ${{ env.ARTIFACT_BUCKET }} \
+            --no-resolve-s3 \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              Environment=prod
+
+      - name: Cleanup Deployment Artifacts
+        if: always()
+        run: |
+          aws s3 rb s3://${{ env.ARTIFACT_BUCKET }} --force || true

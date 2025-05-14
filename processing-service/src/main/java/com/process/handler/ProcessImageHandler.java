@@ -9,6 +9,7 @@ public class ProcessImageHandler implements RequestHandler<SQSEvent, String> {
 
     private final S3Service s3Service;
     private final ProcessImage processImage;
+    String retryQueueName = System.getenv("RETRY_QUEUE");
 
     private final String stagingBucket;
     public ProcessImageHandler() {
@@ -21,8 +22,9 @@ public class ProcessImageHandler implements RequestHandler<SQSEvent, String> {
         DynamoDbService dynamoDbService = new DynamoDbService(region, imageTable);
         EmailService emailService = new EmailService(region);
         ImageProcessor imageProcessor = new ImageProcessor();
+        SqsService sqsService = new SqsService(software.amazon.awssdk.regions.Region.of(region), retryQueueName);
 
-        this.processImage = new ProcessImage(s3Service, dynamoDbService, emailService, imageProcessor);
+        this.processImage = new ProcessImage(s3Service, dynamoDbService, emailService, imageProcessor, sqsService);;
     }
 
     @Override
@@ -59,7 +61,7 @@ public class ProcessImageHandler implements RequestHandler<SQSEvent, String> {
                     continue;
                 }
 
-                processImage.processImage(context, bucket, key, userId, email, firstName, lastName, s3Service);
+                processImage.processImage(context, bucket, key, userId, email, firstName, lastName);
 
             } catch (Exception e) {
                 context.getLogger().log("Error processing message: " + e.getMessage());

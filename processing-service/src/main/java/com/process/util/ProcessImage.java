@@ -6,18 +6,21 @@ public class ProcessImage {
     private final DynamoDbService dynamoDbService;
     private final EmailService emailService;
     private final ImageProcessor imageProcessor;
+    private final S3Service s3Service;
+    private final SqsService sqsService;
 
-    public ProcessImage(S3Service s3Service, DynamoDbService dynamoDbService, EmailService emailService, ImageProcessor imageProcessor) {
+    public ProcessImage(S3Service s3Service, DynamoDbService dynamoDbService, EmailService emailService,
+                        ImageProcessor imageProcessor, SqsService sqsService) {
         this.dynamoDbService = dynamoDbService;
         this.emailService = emailService;
         this.imageProcessor = imageProcessor;
+        this.s3Service = s3Service;
+        this.sqsService = sqsService; // Initialize SqsService
     }
 
-    //    private final String stagingBucket;
     public void processImage(Context context, String bucket, String key, String userId,
-                             String email, String firstName, String lastName, S3Service s3Service) {
+                             String email, String firstName, String lastName) {
         try {
-            // Get image data with better error reporting
             context.getLogger().log("Retrieving image from S3: " + bucket + "/" + key);
             byte[] imageData = s3Service.getImageFromS3(bucket, key);
 
@@ -28,7 +31,6 @@ public class ProcessImage {
 
             context.getLogger().log("Retrieved image data size: " + imageData.length + " bytes");
 
-            // Add watermark to the image
             context.getLogger().log("Adding watermark to image");
             emailService.sendProcessingStartEmail(email, firstName);
             byte[] watermarkedImage = imageProcessor.addWatermark(imageData, firstName, lastName);
@@ -40,30 +42,28 @@ public class ProcessImage {
 
             context.getLogger().log("Watermarked image size: " + watermarkedImage.length + " bytes");
 
-            // Generate a unique ID for the processed image
             String processedKey = "processed/" + java.util.UUID.randomUUID() + "-" +
                     key.substring(key.lastIndexOf("/") + 1);
 
-            // Upload the processed image to the processed bucket
             context.getLogger().log("Uploading processed image to S3");
             s3Service.uploadToProcessedBucket(watermarkedImage, processedKey);
 
-            // Store image metadata in DynamoDB
             context.getLogger().log("Storing image metadata in DynamoDB");
-            dynamoDbService.storeImageMetadata(userId, processedKey, firstName, lastName);
+            String imageUrl = "https://" + System.getenv("PROCESSED_BUCKET") + ".s3." +
+                    System.getenv("AWS_REGION") + ".amazonaws.com/" + processedKey;
 
-            // Delete the original image from the staging bucket
+            dynamoDbService.storeImageMetadata(userId, processedKey, firstName, lastName, imageUrl);
+
             context.getLogger().log("Deleting original image from staging bucket");
             s3Service.deleteFromStagingBucket(bucket, key);
 
-            // Send completion email
             context.getLogger().log("Sending completion email to: " + email);
             if (email != null && !email.trim().isEmpty()) {
                 try {
                     emailService.sendProcessingCompleteEmail(email, firstName, processedKey);
+                    context.getLogger().log("Email sent to the receiver");
                 } catch (Exception e) {
                     context.getLogger().log("Failed to send email: " + e.getMessage());
-                    // Continue processing even if email fails
                 }
             }
 
@@ -74,12 +74,18 @@ public class ProcessImage {
                 context.getLogger().log("Caused by: " + e.getCause().getMessage());
             }
 
-            // For debugging only - in production, don't print full stack traces to logs
             for (StackTraceElement element : e.getStackTrace()) {
                 context.getLogger().log("  at " + element.toString());
             }
-            emailService.sendProcessingFailureEmail(email, firstName );
-            throw new RuntimeException("Failed to process image", e); // Re-throw to trigger retry or DLQ handling
+
+            // Send failure email
+            emailService.sendProcessingFailureEmail(email, firstName);
+
+            // Queue message to RetryQueue for reprocessing
+            context.getLogger().log("Queuing image for retry: " + key);
+            sqsService.queueForRetry(bucket, key, userId, email, firstName, lastName);
+
+            throw new RuntimeException("Failed to process image", e);
         }
     }
 }

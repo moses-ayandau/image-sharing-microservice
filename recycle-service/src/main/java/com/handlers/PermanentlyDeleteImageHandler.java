@@ -7,20 +7,26 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import com.utils.DynamoDBUtils;
 import com.utils.ResponseUtils;
 import com.utils.S3Utils;
-
-import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
 import java.util.Map;
 
-@Slf4j
 public class PermanentlyDeleteImageHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
     public static final String S_3_KEY = "S3Key";
     private final String tableName = System.getenv("IMAGE_TABLE");
     private final String bucketName = System.getenv("PRIMARY_BUCKET");
 
-    private final S3Utils s3Utils = new S3Utils();
-    private final DynamoDBUtils dynamoUtils = new DynamoDBUtils();
+    private  S3Utils s3Utils = new S3Utils();
+    private  DynamoDBUtils dynamoUtils = new DynamoDBUtils();
+
+    public PermanentlyDeleteImageHandler() {
+        this(new S3Utils(), new DynamoDBUtils());
+    }
+
+    public PermanentlyDeleteImageHandler(S3Utils s3Utils, DynamoDBUtils dynamoUtils) {
+        this.s3Utils = s3Utils;
+        this.dynamoUtils = dynamoUtils;
+    }
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
@@ -55,7 +61,7 @@ public class PermanentlyDeleteImageHandler implements RequestHandler<APIGatewayP
             s3Utils.deleteObject(bucketName, key);
             dynamoUtils.deleteRecordFromDynamo(tableName, imageId);
 
-            return ResponseUtils.successResponse(200, Map.of("message","Image permanently deleted") + imageId);
+            return ResponseUtils.successResponse(200, Map.of("message","Image permanently deleted"));
 
         } catch (Exception e) {
             context.getLogger().log("Error permanently deleting image: " + e.getMessage());

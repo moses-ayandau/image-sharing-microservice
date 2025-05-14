@@ -30,6 +30,7 @@ Parameters:
 
   AdminEmail:
     Type: String
+    Default: nicholas.oppong@amalitech.com
     Description: Email address to receive health check notifications
 
   HealthCheckPath:
@@ -66,6 +67,14 @@ Parameters:
     Type: String
     Default: Z07888711CCI43RK69LKQ
     Description: Route 53 Hosted Zone ID
+
+  DestinationRegion:
+    Type: String
+    Default: us-west-2
+
+  ReplicaRegions:
+    Type: CommaDelimitedList
+    Default: us-west-2, eu-west-1
 
 Globals:
   Function:
@@ -238,6 +247,8 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "image-processed-bucket-${Environment}-${AWS::AccountId}"
+      VersioningConfiguration:
+        Status: Enabled  # Enable versioning
       CorsConfiguration:
         CorsRules:
           - AllowedHeaders:
@@ -253,6 +264,89 @@ Resources:
         IgnorePublicAcls: true
         BlockPublicPolicy: true
         RestrictPublicBuckets: true
+      ReplicationConfiguration:
+        Role: !GetAtt S3ReplicationRole.Arn
+        Rules:
+          - Id: ReplicationRule1
+            Status: Enabled
+            Priority: 1
+            Destination:
+              Bucket: !GetAtt DestinationBucket.Arn
+            DeleteMarkerReplication:
+              Status: Disabled
+            Filter:
+              Prefix: ""  # Replicate all objects; modify if needed
+
+  DestinationBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "image-processed-replica-${Environment}-${AWS::AccountId}"
+      VersioningConfiguration:
+        Status: Enabled  # Enable versioning
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+  S3ReplicationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3ReplicationPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObjectVersion
+                  - s3:GetObjectVersionAcl
+                  - s3:GetObjectVersionTagging
+                Resource: !Sub "arn:aws:s3:::image-processed-bucket-${Environment}-${AWS::AccountId}/*"
+              - Effect: Allow
+                Action:
+                  - s3:ReplicateObject
+                  - s3:ReplicateTags
+                  - s3:ReplicateDelete
+                Resource: !Sub "arn:aws:s3:::image-processed-replica-${Environment}-${AWS::AccountId}/*"
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketVersioning
+                  - s3:PutBucketVersioning
+                Resource:
+                  - !Sub "arn:aws:s3:::image-processed-bucket-${Environment}-${AWS::AccountId}"
+                  - !Sub "arn:aws:s3:::image-processed-replica-${Environment}-${AWS::AccountId}"
+
+  DestinationBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DestinationBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !GetAtt S3ReplicationRole.Arn
+            Action:
+              - s3:ReplicateObject
+              - s3:ReplicateTags
+              - s3:ReplicateDelete
+            Resource: !Sub "arn:aws:s3:::image-processed-replica-${Environment}-${AWS::AccountId}/*"
+          - Effect: Allow
+            Principal:
+              AWS: !GetAtt S3ReplicationRole.Arn
+            Action:
+              - s3:ListBucket
+              - s3:GetBucketVersioning
+            Resource: !Sub "arn:aws:s3:::image-processed-replica-${Environment}-${AWS::AccountId}"
 
   RecycleBinBucket:
     Type: AWS::S3::Bucket
@@ -330,6 +424,9 @@ Resources:
         AttributeName: ttl
         Enabled: true
 
+
+
+
   # ===== SQS Queues =====
   RetryQueue:
     Type: AWS::SQS::Queue
@@ -340,6 +437,37 @@ Resources:
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
         maxReceiveCount: 5
+
+  DLQRedriveRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SQSRedrivePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt DeadLetterQueue.Arn
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:GetQueueUrl
+                Resource: !GetAtt RetryQueue.Arn
+
+
 
   DeadLetterQueue:
     Type: AWS::SQS::Queue
@@ -441,9 +569,9 @@ Resources:
           AttributeDataType: String
           Mutable: true
           Required: true
-      LambdaConfig:
-        PostConfirmation: !GetAtt PostConfirmationLambda.Arn
-        PostAuthentication: !GetAtt SigninAlertLambda.Arn
+      # LambdaConfig:
+      #   PostConfirmation: !GetAtt PostConfirmationLambda.Arn
+      #   PostAuthentication: !GetAtt SigninAlertLambda.Arn
       AccountRecoverySetting:
         RecoveryMechanisms:
           - Priority: 1
@@ -530,6 +658,53 @@ Resources:
           Properties:
             Queue: !GetAtt RetryQueue.Arn
             BatchSize: 10
+
+
+  # Lambda Function for DLQ Redrive
+  DLQRedriveFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-dlq-redrive-function"
+      CodeUri: processing-service
+      Handler: com.process.handler.DLQRedriveHandler::handleRequest
+      Description: Moves messages from DLQ back to main retry queue with delay
+      Runtime: java21
+      MemorySize: 512
+      Timeout: 300
+      Environment:
+        Variables:
+          DLQ_URL: !Ref DeadLetterQueue
+          RETRY_QUEUE_URL: !Ref RetryQueue
+          MAX_MESSAGES_TO_REDRIVE: 100
+          JAVA_TOOL_OPTIONS: -XX:+TieredCompilation -XX:TieredStopAtLevel=1
+      Role: !GetAtt DLQRedriveRole.Arn
+      Events:
+        ScheduledEvent:
+          Type: Schedule
+          Properties:
+            Schedule: rate(1 hour)
+            Enabled: true
+            Description: "Schedule for DLQ redrive processing"
+
+  DLQMessagesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-dlq-messages-alarm"
+      AlarmDescription: "Alarm when messages accumulate in the Dead Letter Queue"
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt DeadLetterQueue.QueueName
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref HealthAlertTopic
+      OKActions:
+        - !Ref HealthAlertTopic
 
   # ===== Lambda Functions: Image Sharing =====
   GetActiveImagesFunction:
@@ -711,17 +886,16 @@ Resources:
   WelcomeEmailLambda:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub photo-App-welcome-email-${Environment}
+      FunctionName: !Sub "photo-blog-welcome-email-${Environment}"
       Handler: com.amalitechphotoappcognitoauth.handlers.WelcomeEmailHandler::handleRequest
-      Runtime: java21
       CodeUri: cognito-service/
-      MemorySize: 512
-      Timeout: 30
+      Timeout: 60
+      ReservedConcurrentExecutions: 10
       Environment:
         Variables:
-          EMAIL_SOURCE: "noreply@mscv2group2.link"
+          EMAIL_SOURCE: !Sub "noreply@${EmailDomain}"
           ENVIRONMENT: !Ref Environment
-          APP_URL: !Sub https://mscv2group2.link
+          APP_URL: !Sub "https://${EmailDomain}"
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -729,6 +903,33 @@ Resources:
               Action:
                 - ses:SendEmail
                 - ses:SendRawEmail
+                - ses:GetIdentityVerificationAttributes
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt WelcomeEmailDLQ.Arn
+
+  VerifyEmailLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "photo-blog-verify-email-${Environment}"
+      Handler: com.amalitechphotoappcognitoauth.handlers.VerifyEmailHandler::handleRequest
+      CodeUri: cognito-service/
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:VerifyEmailIdentity
               Resource: '*'
             - Effect: Allow
               Action:
@@ -740,17 +941,14 @@ Resources:
   SigninAlertLambda:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub photo-App-signin-alert-${Environment}
+      FunctionName: !Sub "photo-blog-signin-alert-${Environment}"
       Handler: com.amalitechphotoappcognitoauth.handlers.SigninAlertHandler::handleRequest
-      Runtime: java21
       CodeUri: cognito-service/
-      MemorySize: 512
-      Timeout: 30
       Environment:
         Variables:
-          EMAIL_SOURCE: "noreply@mscv2group2.link"
+          EMAIL_SOURCE: !Sub "noreply@${EmailDomain}"
           ENVIRONMENT: !Ref Environment
-          APP_URL: !Sub https://mscv2group2.link
+          APP_URL: !Sub "https://${EmailDomain}"
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -833,7 +1031,7 @@ Resources:
                 - s3:GetBucketVersioning
                 - s3:GetBucketTagging
                 - s3:ListBucket
-              Resource:
+              Resource: 
                 - !Sub "arn:aws:s3:::${ProcessedBucket}"
                 - !Sub "arn:aws:s3:::${ProcessedBucket}/*"
             - Effect: Allow
@@ -933,21 +1131,37 @@ Resources:
                 Resource: "*"
 
   # ===== Lambda Permissions =====
-  LambdaInvokePermissionWelcome:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !GetAtt WelcomeEmailLambda.Arn
-      Action: lambda:InvokeFunction
-      Principal: cognito-idp.amazonaws.com
-      SourceArn: !GetAtt CognitoUserPool.Arn
+  # LambdaInvokePermission:
+  #   Type: AWS::Lambda::Permission
+  #   Properties:
+  #     FunctionName: !GetAtt PostConfirmationLambda.Arn
+  #     Action: lambda:InvokeFunction
+  #     Principal: cognito-idp.amazonaws.com
+  #     SourceArn: !GetAtt CognitoUserPool.Arn
 
-  LambdaInvokePermissionSignin:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !GetAtt SigninAlertLambda.Arn
-      Action: lambda:InvokeFunction
-      Principal: cognito-idp.amazonaws.com
-      SourceArn: !GetAtt CognitoUserPool.Arn
+  # WelcomeEmailLambdaPermissionSNS:
+  #   Type: AWS::Lambda::Permission
+  #   Properties:
+  #     Action: lambda:InvokeFunction
+  #     FunctionName: !GetAtt WelcomeEmailLambda.Arn
+  #     Principal: sns.amazonaws.com
+  #     SourceArn: !Ref PostConfirmationSNSTopic
+
+  # VerifyEmailLambdaPermissionSNS:
+  #   Type: AWS::Lambda::Permission
+  #   Properties:
+  #     Action: lambda:InvokeFunction
+  #     FunctionName: !GetAtt VerifyEmailLambda.Arn
+  #     Principal: sns.amazonaws.com
+  #     SourceArn: !Ref PostConfirmationSNSTopic
+
+  # LambdaInvokePermissionSignin:
+  #   Type: AWS::Lambda::Permission
+  #   Properties:
+  #     FunctionName: !GetAtt SigninAlertLambda.Arn
+  #     Action: lambda:InvokeFunction
+  #     Principal: cognito-idp.amazonaws.com
+  #     SourceArn: !GetAtt CognitoUserPool.Arn
 
   # ===== Route 53 Health Checks =====
   ApiHealthCheck:

@@ -17,25 +17,29 @@ public class S3Repository {
         this.bucketName = System.getenv("BUCKET_NAME");
     }
 
-    // For testing with dependency injection
     public S3Repository(S3Client s3Client, String bucketName) {
         this.s3Client = s3Client;
         this.bucketName = bucketName;
     }
 
+    /**
+     * Uploads a file to the S3 bucket.
+     *
+     * @param fileName    The name/path to use for the file in S3
+     * @param fileData    The binary content of the file
+     * @param contentType The MIME type of the file
+     * @return The URL to the uploaded file
+     */
     public String uploadFile(String fileName, byte[] fileData, String contentType) {
-        // Create the PutObjectRequest
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                 .bucket(bucketName)
                 .key(fileName)
                 .contentType(contentType)
                 .build();
         
-        // Upload the file
-        PutObjectResponse response = s3Client.putObject(putObjectRequest, 
+        PutObjectResponse response = s3Client.putObject(putObjectRequest,
                 RequestBody.fromBytes(fileData));
         
-        // Return the URL to the uploaded file
         return String.format("https://%s.s3.amazonaws.com/%s", bucketName, fileName);
     }
 }

@@ -1,6 +1,6 @@
 package com.service;
 
-import upload.repository.S3Repository;
+import com.repository.S3Repository;
 
 import java.io.ByteArrayInputStream;
 import java.net.URLConnection;
@@ -16,13 +16,21 @@ public class ImageService {
         this.s3Repository = new S3Repository();
     }
     
-    // For testing with dependency injection
     public ImageService(S3Repository s3Repository) {
         this.s3Repository = s3Repository;
     }
     
+    /**
+     * Processes an image upload request by validating the image data,
+     * determining the content type, and storing the image in S3.
+     *
+     * @param username     The username of the user uploading the image
+     * @param imageBase64  The base64-encoded image data
+     * @param contentType  The content type of the image (optional, will be detected if null)
+     * @return A map containing the URL of the uploaded image and a success message
+     * @throws Exception If the image processing or upload fails
+     */
     public Map<String, Object> processImageUpload(String username, String imageBase64, String contentType) throws Exception {
-        // Extract and validate image data
         byte[] imageData = Base64.getDecoder().decode(imageBase64);
         
         // Validate content type
@@ -36,19 +44,16 @@ public class ImageService {
             throw new IllegalArgumentException("Unsupported file type. Only PNG and JPG/JPEG allowed.");
         }
         
-        // Generate a file extension based on MIME type
         String extension = contentType.equals("image/png") ? ".png" : ".jpg";
         
-        // Create a unique filename with username
-        String fileName = String.format("uploads/%s-%s%s", 
+
+        String fileName = String.format("uploads/%s-%s%s",
                 username, 
                 UUID.randomUUID().toString(), 
                 extension);
         
-        // Upload to S3 and get URL
         String fileUrl = s3Repository.uploadFile(fileName, imageData, contentType);
         
-        // Create response
         Map<String, Object> response = new HashMap<>();
         response.put("url", fileUrl);
         response.put("message", "Image uploaded Successfully");

@@ -8,24 +8,21 @@ import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
 import software.amazon.awssdk.services.sqs.model.SqsException;
 
+import java.util.logging.Logger;
+
 public class SqsService {
     private final SqsClient sqsClient;
     private final String queueName;
-    // Don't initialize queueUrl until needed
     private String queueUrl;
 
     public SqsService(Region region, String queueName) {
         this.sqsClient = SqsClient.builder().region(region).build();
         this.queueName = queueName;
 
-        // Log initialization information
         System.out.println("SqsService initialized with queueName: " + queueName + " in region: " + region.id());
     }
 
-    /**
-     * Gets the queue URL, with retry logic for transient issues
-     * @return The queue URL
-     */
+
     private String getQueueUrl() {
         if (queueUrl != null) {
             return queueUrl;
@@ -35,10 +32,9 @@ public class SqsService {
             throw new IllegalStateException("Queue name is null or empty. Please check the environment variable.");
         }
 
-        // Retry logic with exponential backoff
         int maxRetries = 3;
         int retryCount = 0;
-        int waitTimeMs = 1000; // Start with 1 second
+        int waitTimeMs = 1000;
 
         while (retryCount < maxRetries) {
             try {
@@ -64,7 +60,7 @@ public class SqsService {
                 try {
                     System.out.println("Waiting " + waitTimeMs + "ms before retry...");
                     Thread.sleep(waitTimeMs);
-                    waitTimeMs *= 2; // Exponential backoff
+                    waitTimeMs *= 2;
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
                     throw new RuntimeException("Thread interrupted while waiting to retry", ie);
@@ -75,22 +71,11 @@ public class SqsService {
         throw new RuntimeException("Could not get queue URL for " + queueName + " after " + maxRetries + " attempts");
     }
 
-    /**
-     * Queue an image for retry processing
-     *
-     * @param bucket    S3 bucket containing the original image
-     * @param key       S3 key of the original image
-     * @param userId    User ID associated with the image
-     * @param email     User's email for notification
-     * @param firstName User's first name
-     * @param lastName  User's last name
-     */
+
     public void queueForRetry(String bucket, String key, String userId, String email, String firstName, String lastName) {
         try {
-            // Get queue URL (with retry logic) only when needed
             String url = getQueueUrl();
 
-            // Format: bucket,key,userId,email,firstName,lastName
             String messageBody = String.format("%s,%s,%s,%s,%s,%s",
                     bucket, key, userId, email, firstName, lastName);
 
@@ -100,16 +85,11 @@ public class SqsService {
                     .build();
 
             sqsClient.sendMessage(sendMsgRequest);
-            System.out.println("Successfully sent message to queue: " + messageBody);
         } catch (Exception e) {
-            System.err.println("Error sending message to SQS: " + e.getMessage());
-
-            // Make the upload succeed even if queueing fails
-            // This ensures the image is saved even if processing can't be queued
-            System.err.println("WARNING: Image was uploaded successfully but could not be queued for processing. " +
+            Logger.getAnonymousLogger().info("WARNING: Image was uploaded successfully but could not be queued for processing. " +
                     "The image will need to be processed manually.");
 
-            // In a production system, you might want to log this to a monitoring system
+
         }
     }
 }

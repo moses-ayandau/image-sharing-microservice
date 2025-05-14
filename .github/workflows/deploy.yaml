@@ -1,4 +1,4 @@
-name: Deploy SAM Stack
+name: Deploy SAM Stack 
 
 on:
   push:

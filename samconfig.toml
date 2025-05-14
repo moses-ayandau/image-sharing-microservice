@@ -16,8 +16,8 @@ lint = true
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = true
 resolve_s3 = true
-s3_prefix = "photo-processing-blog"
-region = "eu-central-1"
+s3_prefix = "image-processor"
+region = "us-east-1"
 parameter_overrides = "Environment=\"dev\" ImageTableName=\"photo\" RetryQueueName=\"image-retry-queue\" EmailDomain=\"mscv2group2.link\" AdminEmail=\"vidaserwaa26@gmail.com\" HealthCheckPath=\"/health\" HealthCheckInterval=\"30\" HealthCheckFailureThreshold=\"3\" ErrorThreshold=\"5\" EvaluationPeriod=\"5\" DomainName=\"photo.mscv2group2.link\" HostedZoneId=\"Z07888711CCI43RK69LKQ\""
 image_repositories = []
 

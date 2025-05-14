@@ -720,6 +720,8 @@ Resources:
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref PhotoTable
+        - S3ReadPolicy:
+            BucketName: !Ref ProcessedBucket
       Events:
         ApiEvent:
           Type: Api
@@ -743,6 +745,8 @@ Resources:
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref PhotoTable
+        - S3ReadPolicy:
+            BucketName: !Ref ProcessedBucket
       Events:
         ApiEvent:
           Type: Api

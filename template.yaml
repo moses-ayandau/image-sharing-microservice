@@ -132,7 +132,7 @@ Resources:
         - multipart/form-data
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-        AllowHeaders: "'Content-Type,Authorization'"
+        AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
         AllowOrigin: "'*'"
         MaxAge: "'3600'"
       MethodSettings:
@@ -143,65 +143,6 @@ Resources:
           LoggingLevel: INFO
       Tags:
         Environment: !Ref Environment
-      DefinitionBody:
-        swagger: '2.0'
-        info:
-          title: !Ref 'AWS::StackName'
-        paths:
-          /upload:
-            post:
-              x-amazon-apigateway-integration:
-                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UploadImageFunction.Arn}/invocations"
-                httpMethod: POST
-                type: aws_proxy
-          # /images/{photoId}/delete:
-          #   post:
-          #     x-amazon-apigateway-integration:
-          #       uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteImageFunction.Arn}/invocations"
-          #       httpMethod: POST
-          #       type: aws_proxy
-          # /images/{photoId}/restore:
-          #   post:
-          #     x-amazon-apigateway-integration:
-          #       uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RecoverImageFunction.Arn}/invocations"
-          #       httpMethod: POST
-          #       type: aws_proxy
-          # /images/{photoId}/permanent-delete:
-          #   delete:
-          #     x-amazon-apigateway-integration:
-          #       uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PermanentlyDeleteImageFunction.Arn}/invocations"
-          #       httpMethod: POST
-          #       type: aws_proxy
-          /health:
-            get:
-              x-amazon-apigateway-integration:
-                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HealthCheckFunction.Arn}/invocations"
-                httpMethod: POST
-                type: aws_proxy
-          /health/component/{component}:
-            get:
-              x-amazon-apigateway-integration:
-                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ComponentHealthCheckFunction.Arn}/invocations"
-                httpMethod: POST
-                type: aws_proxy
-          /images/{userId}/active:
-            get:
-              x-amazon-apigateway-integration:
-                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetActiveImagesFunction.Arn}/invocations"
-                httpMethod: POST
-                type: aws_proxy
-          /images/{userId}/deleted:
-            get:
-              x-amazon-apigateway-integration:
-                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetDeletedImagesFunction.Arn}/invocations"
-                httpMethod: POST
-                type: aws_proxy
-          /images/share:
-            post:
-              x-amazon-apigateway-integration:
-                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ShareImageFunction.Arn}/invocations"
-                httpMethod: POST
-                type: aws_proxy
   #    DependsOn: ApiGatewayAccount
 
   # SSL Certificate for domain

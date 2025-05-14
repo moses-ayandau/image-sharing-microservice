@@ -16,15 +16,30 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import java.util.Map;
 
 public class RecoverImageHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
-    private final String tableName = System.getenv("IMAGE_TABLE");
-    private final String bucketName = System.getenv("PRIMARY_BUCKET");
+    private String tableName = System.getenv("IMAGE_TABLE");
+    private String bucketName = System.getenv("PRIMARY_BUCKET");
 
     private static final Log log = LogFactory.getLog(RecoverImageHandler.class);
 
 
-    private static final ObjectMapper mapper = new ObjectMapper();
-    private final S3Utils s3Utils = new S3Utils();
-    private final DynamoDBUtils dynamoUtils = new DynamoDBUtils();
+    private final ObjectMapper mapper;
+    private final S3Utils s3Utils;
+    private final DynamoDBUtils dynamoUtils;
+
+    public RecoverImageHandler(){
+        this.s3Utils = new S3Utils();
+        this.dynamoUtils = new DynamoDBUtils();
+        this.mapper = new ObjectMapper();
+    }
+
+    public RecoverImageHandler(String tableName, String bucketName, S3Utils s3Utils, DynamoDBUtils dynamoUtils, ObjectMapper mapper) {
+        this.s3Utils = s3Utils;
+        this.dynamoUtils = dynamoUtils;
+        this.mapper = mapper;
+        this.tableName = tableName;
+        this.bucketName = bucketName;
+    }
+
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent request, Context context) {
@@ -48,7 +63,7 @@ public class RecoverImageHandler implements RequestHandler<APIGatewayProxyReques
             String originalKey = "main/" + userId + "/" + imageId;
             String recycleKey = "recycle/" + userId + "/" + imageId;
 
-            log.info("Original Key: "+ originalKey);
+            log.info("Original Key: " + originalKey);
             log.info("recycle key: " + recycleKey);
 
             Map<String, AttributeValue> item = dynamoUtils.getItemFromDynamo(tableName, imageId);

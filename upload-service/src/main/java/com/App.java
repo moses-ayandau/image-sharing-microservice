@@ -7,7 +7,7 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import upload.service.ImageService;
+import com.service.ImageService;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
@@ -21,6 +21,15 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
         this.objectMapper = new ObjectMapper();
     }
     
+    /**
+     * Handles incoming API Gateway requests for image uploads.
+     * Processes the request, extracts user information from JWT token,
+     * and delegates to ImageService for image processing.
+     *
+     * @param input   The API Gateway request event
+     * @param context The Lambda execution context
+     * @return API Gateway response with status code and body
+     */
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
         Map<String, String> headers = getCorsHeaders();
@@ -32,7 +41,7 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
             String body = input.getBody();
             JsonNode requestJson = objectMapper.readTree(body);
             
-            // Extract JWT token from Authorization header
+
             String token = input.getHeaders().get("Authorization");
             if (token != null && token.startsWith("Bearer ")) {
                 token = token.substring(7); // Remove "Bearer " prefix
@@ -75,6 +84,14 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
         }
     }
     
+    /**
+     * Extracts the username from a JWT token.
+     * Attempts to find username in common JWT claim fields.
+     *
+     * @param token The JWT token string
+     * @return The extracted username
+     * @throws IllegalArgumentException If username cannot be extracted
+     */
     private String extractUsernameFromToken(String token) {
         try {
             String[] parts = token.split("\\.");
@@ -100,6 +117,13 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
         }
     }
     
+    /**
+     * Creates an error response with the given exception message.
+     *
+     * @param headers The HTTP headers to include in the response
+     * @param e The exception that caused the error
+     * @return API Gateway response with error details
+     */
     private APIGatewayProxyResponseEvent getErrorResponse(Map<String, String> headers, Exception e) {
         Map<String, String> errorResponse = new HashMap<>();
         errorResponse.put("error", e.getMessage());
@@ -117,6 +141,13 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
         }
     }
     
+    /**
+     * Handles OPTIONS requests for CORS preflight.
+     *
+     * @param input The API Gateway request event
+     * @param context The Lambda execution context
+     * @return API Gateway response with CORS headers
+     */
     public APIGatewayProxyResponseEvent handleOptions(APIGatewayProxyRequestEvent input, Context context) {
         return new APIGatewayProxyResponseEvent()
             .withStatusCode(200)
@@ -124,6 +155,11 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
             .withBody("");
     }
     
+    /**
+     * Creates a map of CORS headers for cross-origin requests.
+     *
+     * @return Map of HTTP headers for CORS support
+     */
     private Map<String, String> getCorsHeaders() {
         Map<String, String> headers = new HashMap<>();
         headers.put("Content-Type", "application/json");

@@ -1,4 +1,4 @@
-package upload.repository;
+package com.repository;
 
 import org.junit.Before;
 import org.junit.Test;

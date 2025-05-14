@@ -331,6 +331,7 @@ public class PermanentlyDeleteImageHandlerTest {
         }
     }
 
+
     @Test
     public void testHandleRequest_GetItemFromDynamoException() {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();

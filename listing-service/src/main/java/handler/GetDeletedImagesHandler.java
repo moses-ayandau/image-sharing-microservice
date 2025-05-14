@@ -8,7 +8,6 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import factories.DynamodbFactory;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.*;
-import constants.constants;
 import utils.DynamoDbUtils;
 import utils.ResponseUtils;
 
@@ -26,7 +25,7 @@ public class GetDeletedImagesHandler implements RequestHandler<APIGatewayProxyRe
 
     public GetDeletedImagesHandler() {
         this.dynamoDbClient = DynamodbFactory.createClient();
-        this.tableName = constants.IMAGE_TABLE;
+        this.tableName = System.getenv("IMAGE_TABLE");
     }
 
     public APIGatewayProxyResponseEvent handleRequest(final APIGatewayProxyRequestEvent input, final Context context) {

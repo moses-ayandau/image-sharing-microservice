@@ -6,15 +6,20 @@ public class ProcessImage {
     private final DynamoDbService dynamoDbService;
     private final EmailService emailService;
     private final ImageProcessor imageProcessor;
+    private final S3Service s3Service;
+    private final SqsService sqsService;
 
-    public ProcessImage(S3Service s3Service, DynamoDbService dynamoDbService, EmailService emailService, ImageProcessor imageProcessor) {
+    public ProcessImage(S3Service s3Service, DynamoDbService dynamoDbService, EmailService emailService,
+                        ImageProcessor imageProcessor, SqsService sqsService) {
         this.dynamoDbService = dynamoDbService;
         this.emailService = emailService;
         this.imageProcessor = imageProcessor;
+        this.s3Service = s3Service;
+        this.sqsService = sqsService; // Initialize SqsService
     }
 
     public void processImage(Context context, String bucket, String key, String userId,
-                             String email, String firstName, String lastName, S3Service s3Service) {
+                             String email, String firstName, String lastName) {
         try {
             context.getLogger().log("Retrieving image from S3: " + bucket + "/" + key);
             byte[] imageData = s3Service.getImageFromS3(bucket, key);
@@ -44,7 +49,8 @@ public class ProcessImage {
             s3Service.uploadToProcessedBucket(watermarkedImage, processedKey);
 
             context.getLogger().log("Storing image metadata in DynamoDB");
-            String imageUrl = "https://" + System.getenv("PROCESSED_BUCKET")+ ".s3." + System.getenv("AWS_REGION") + ".amazonaws.com/" + processedKey;
+            String imageUrl = "https://" + System.getenv("PROCESSED_BUCKET") + ".s3." +
+                    System.getenv("AWS_REGION") + ".amazonaws.com/" + processedKey;
 
             dynamoDbService.storeImageMetadata(userId, processedKey, firstName, lastName, imageUrl);
 
@@ -59,7 +65,6 @@ public class ProcessImage {
                 } catch (Exception e) {
                     context.getLogger().log("Failed to send email: " + e.getMessage());
                 }
-
             }
 
             context.getLogger().log("Successfully processed image: " + key);
@@ -72,7 +77,14 @@ public class ProcessImage {
             for (StackTraceElement element : e.getStackTrace()) {
                 context.getLogger().log("  at " + element.toString());
             }
-            emailService.sendProcessingFailureEmail(email, firstName );
+
+            // Send failure email
+            emailService.sendProcessingFailureEmail(email, firstName);
+
+            // Queue message to RetryQueue for reprocessing
+            context.getLogger().log("Queuing image for retry: " + key);
+            sqsService.queueForRetry(bucket, key, userId, email, firstName, lastName);
+
             throw new RuntimeException("Failed to process image", e);
         }
     }

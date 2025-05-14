@@ -36,6 +36,7 @@ public class DynamoDbService {
             item.put("lastName", AttributeValue.builder().s(lastName).build());
             item.put("processedDate", AttributeValue.builder().s(Instant.now().toString()).build());
             item.put("imageUrl", AttributeValue.builder().s(imageUrl).build());
+            item.put("status", AttributeValue.fromS("ACTIVE"));
 
 
             long ttl = Instant.now().plus(30, ChronoUnit.DAYS).getEpochSecond();

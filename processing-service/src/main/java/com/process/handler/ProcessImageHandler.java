@@ -25,17 +25,6 @@ public class ProcessImageHandler implements RequestHandler<SQSEvent, String> {
         this.processImage = new ProcessImage(s3Service, dynamoDbService, emailService, imageProcessor);
     }
 
-    public ProcessImageHandler(ProcessImage processImage) {
-        this.processImage = processImage;
-        String region = System.getenv("AWS_REGION");
-        this.stagingBucket = System.getenv("STAGING_BUCKET");
-        String processedBucket = System.getenv("PROCESSED_BUCKET");
-        String imageTable = System.getenv("IMAGE_TABLE");
-
-        this.s3Service = new S3Service(region, processedBucket);
-
-    }
-
     @Override
     public String handleRequest(SQSEvent sqsEvent, Context context) {
         context.getLogger().log("Starting to process " + sqsEvent.getRecords().size() + " messages");
@@ -44,7 +33,6 @@ public class ProcessImageHandler implements RequestHandler<SQSEvent, String> {
             context.getLogger().log("Processing message: " + message.getBody());
 
             try {
-                // Parse the message
                 String[] parts = message.getBody().split(",");
                 if (parts.length < 6) {
                     context.getLogger().log("Invalid message format: " + message.getBody());
@@ -58,7 +46,6 @@ public class ProcessImageHandler implements RequestHandler<SQSEvent, String> {
                 String firstName = parts[4];
                 String lastName = parts[5];
 
-                // Log all parts for debugging
                 context.getLogger().log("Message parts:");
                 context.getLogger().log("  Bucket: " + bucket);
                 context.getLogger().log("  Key: " + key);
@@ -67,18 +54,15 @@ public class ProcessImageHandler implements RequestHandler<SQSEvent, String> {
                 context.getLogger().log("  FirstName: " + firstName);
                 context.getLogger().log("  LastName: " + lastName);
 
-                // Check if the original file still exists
                 if (!s3Service.objectExists(bucket, key)) {
                     context.getLogger().log("Original file no longer exists: " + bucket + "/" + key);
                     continue;
                 }
 
-                // Process the image
                 processImage.processImage(context, bucket, key, userId, email, firstName, lastName, s3Service);
 
             } catch (Exception e) {
                 context.getLogger().log("Error processing message: " + e.getMessage());
-                // In production, consider re-queueing with a backoff or moving to DLQ
             }
         }
 

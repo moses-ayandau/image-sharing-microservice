@@ -23,13 +23,6 @@ public class S3Service {
                 " in region: " + region);
     }
 
-    /**
-     * Checks if an object exists in S3
-     *
-     * @param bucket The bucket name
-     * @param key    The object key
-     * @return True if the object exists, false otherwise
-     */
     public boolean objectExists(String bucket, String key) {
         try {
             HeadObjectRequest headObjectRequest = HeadObjectRequest.builder()
@@ -45,14 +38,7 @@ public class S3Service {
         }
     }
 
-    /**
-     * Retrieves an image from S3
-     *
-     * @param bucket The bucket name
-     * @param key    The object key
-     * @return The image as byte array
-     * @throws IOException If the image cannot be retrieved
-     */
+
     public byte[] getImageFromS3(String bucket, String key) throws IOException {
         try {
             GetObjectRequest getObjectRequest = GetObjectRequest.builder()
@@ -66,13 +52,6 @@ public class S3Service {
         }
     }
 
-    /**
-     * Uploads a processed image to the processed bucket
-     *
-     * @param imageData The image data as byte array
-     * @param key       The object key
-     * @throws IOException If the upload fails
-     */
     public void uploadToProcessedBucket(byte[] imageData, String key) throws IOException {
         try {
             PutObjectRequest putObjectRequest = PutObjectRequest.builder()
@@ -87,13 +66,7 @@ public class S3Service {
         }
     }
 
-    /**
-     * Deletes an image from the staging bucket
-     *
-     * @param bucket The bucket name
-     * @param key    The object key
-     * @throws IOException If the deletion fails
-     */
+
     public void deleteFromStagingBucket(String bucket, String key) throws IOException {
         try {
             DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder()

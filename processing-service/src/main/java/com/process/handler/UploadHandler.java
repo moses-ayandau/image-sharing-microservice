@@ -163,7 +163,7 @@ public class UploadHandler implements RequestHandler<APIGatewayProxyRequestEvent
             );
 
             // Generate unique userId for this upload if not provided
-            String userId = UUID.randomUUID().toString();
+            String userId = "4e265c14-4fe1-4a56-ac07-914a5d0bf99c";
 
             // Queue for processing via SQS
             context.getLogger().log("Queueing image for processing");
@@ -178,7 +178,8 @@ public class UploadHandler implements RequestHandler<APIGatewayProxyRequestEvent
                     "firstName", firstName,
                     "lastName", lastName,
                     "email", email,
-                    "dateOfUpload", dateOfUpload
+                    "dateOfUpload", dateOfUpload,
+                    "imageTitle", imageTitle
             ));
 
             return new APIGatewayProxyResponseEvent()

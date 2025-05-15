@@ -577,13 +577,13 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "image-upload-function-${Environment}"
-      CodeUri: processing-service
-      Handler: com.process.handler.UploadHandler::handleRequest
+      CodeUri: upload-service
+      Handler: com.App::handleRequest
       Description: Handles image uploads via API Gateway
       Environment:
         Variables:
           STAGING_BUCKET: !Ref StagingBucket
-          RETRY_QUEUE: !Ref RetryQueueName
+          QUEUE_URL: !Ref RetryQueueName
           ENVIRONMENT: !Ref Environment
       Role: !GetAtt UploadFunctionRole.Arn
       Events:
@@ -942,6 +942,8 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /health
             Method: get
+            Auth:
+              Authorizer: NONE
 
   ComponentHealthCheckFunction:
     Type: AWS::Serverless::Function
@@ -993,6 +995,8 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /health/component/{component}
             Method: get
+            Auth:
+              Authorizer: NONE
 
   # ===== IAM Roles =====
   UploadFunctionRole:

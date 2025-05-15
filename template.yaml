@@ -1,4 +1,3 @@
-
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Integrated Image Processing System with Upload, Processing, Recycling, Authentication, and Health Monitoring
@@ -489,7 +488,7 @@ Resources:
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: !Sub "PhotoBlogUserPool-${Environment}"
+      UserPoolName: !Sub PhotoAppUserPool-${Environment}
       AdminCreateUserConfig:
         AllowAdminCreateUserOnly: false
       AutoVerifiedAttributes:
@@ -513,9 +512,9 @@ Resources:
           AttributeDataType: String
           Mutable: true
           Required: true
-      # LambdaConfig:
-      #   PostConfirmation: !GetAtt PostConfirmationLambda.Arn
-      #   PostAuthentication: !GetAtt SigninAlertLambda.Arn
+      LambdaConfig:
+        PostConfirmation: !GetAtt WelcomeEmailLambda.Arn
+        PostAuthentication: !GetAtt SigninAlertLambda.Arn
       AccountRecoverySetting:
         RecoveryMechanisms:
           - Priority: 1
@@ -525,7 +524,7 @@ Resources:
     Type: AWS::Cognito::UserPoolClient
     Properties:
       UserPoolId: !Ref CognitoUserPool
-      ClientName: !Sub "PhotoBlogAppClient-${Environment}"
+      ClientName: !Sub PhotoAppAppClient-${Environment}
       GenerateSecret: false
       PreventUserExistenceErrors: ENABLED
       ExplicitAuthFlows:
@@ -535,9 +534,9 @@ Resources:
       SupportedIdentityProviders:
         - COGNITO
       CallbackURLs:
-        - !Sub "https://${EmailDomain}/auth/callback"
+        - !Sub https://mscv2group2.link/auth/callback
       LogoutURLs:
-        - !Sub "https://${EmailDomain}/auth/logout"
+        - !Sub https://mscv2group2.link/auth/logout
       AllowedOAuthFlows:
         - code
         - implicit
@@ -837,16 +836,17 @@ Resources:
   WelcomeEmailLambda:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub "photo-blog-welcome-email-${Environment}"
+      FunctionName: !Sub photo-App-welcome-email-${Environment}
       Handler: com.amalitechphotoappcognitoauth.handlers.WelcomeEmailHandler::handleRequest
+      Runtime: java21
       CodeUri: cognito-service/
-      Timeout: 60
-      ReservedConcurrentExecutions: 10
+      MemorySize: 512
+      Timeout: 30
       Environment:
         Variables:
-          EMAIL_SOURCE: !Sub "noreply@${EmailDomain}"
+          EMAIL_SOURCE: "noreply@mscv2group2.link"
           ENVIRONMENT: !Ref Environment
-          APP_URL: !Sub "https://${EmailDomain}"
+          APP_URL: !Sub https://mscv2group2.link
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -854,33 +854,6 @@ Resources:
               Action:
                 - ses:SendEmail
                 - ses:SendRawEmail
-                - ses:GetIdentityVerificationAttributes
-              Resource: '*'
-            - Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-              Resource: '*'
-      DeadLetterQueue:
-        Type: SQS
-        TargetArn: !GetAtt WelcomeEmailDLQ.Arn
-
-  VerifyEmailLambda:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub "photo-blog-verify-email-${Environment}"
-      Handler: com.amalitechphotoappcognitoauth.handlers.VerifyEmailHandler::handleRequest
-      CodeUri: cognito-service/
-      Environment:
-        Variables:
-          ENVIRONMENT: !Ref Environment
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - ses:VerifyEmailIdentity
               Resource: '*'
             - Effect: Allow
               Action:
@@ -892,14 +865,17 @@ Resources:
   SigninAlertLambda:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub "photo-blog-signin-alert-${Environment}"
+      FunctionName: !Sub photo-App-signin-alert-${Environment}
       Handler: com.amalitechphotoappcognitoauth.handlers.SigninAlertHandler::handleRequest
+      Runtime: java21
       CodeUri: cognito-service/
+      MemorySize: 512
+      Timeout: 30
       Environment:
         Variables:
-          EMAIL_SOURCE: !Sub "noreply@${EmailDomain}"
+          EMAIL_SOURCE: "noreply@mscv2group2.link"
           ENVIRONMENT: !Ref Environment
-          APP_URL: !Sub "https://${EmailDomain}"
+          APP_URL: !Sub https://mscv2group2.link
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -914,6 +890,7 @@ Resources:
                 - logs:CreateLogStream
                 - logs:PutLogEvents
               Resource: '*'
+
   # ===== Lambda Functions: Health Check =====
   HealthCheckFunction:
     Type: AWS::Serverless::Function
@@ -982,7 +959,7 @@ Resources:
                 - s3:GetBucketVersioning
                 - s3:GetBucketTagging
                 - s3:ListBucket
-              Resource:
+              Resource: 
                 - !Sub "arn:aws:s3:::${ProcessedBucket}"
                 - !Sub "arn:aws:s3:::${ProcessedBucket}/*"
             - Effect: Allow
@@ -1081,38 +1058,22 @@ Resources:
                   - ses:SendRawEmail
                 Resource: "*"
 
-  # ===== Lambda Permissions =====
-  # LambdaInvokePermission:
-  #   Type: AWS::Lambda::Permission
-  #   Properties:
-  #     FunctionName: !GetAtt PostConfirmationLambda.Arn
-  #     Action: lambda:InvokeFunction
-  #     Principal: cognito-idp.amazonaws.com
-  #     SourceArn: !GetAtt CognitoUserPool.Arn
+  # Lambda Permissions for Cognito Triggers
+  LambdaInvokePermissionWelcome:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt WelcomeEmailLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt CognitoUserPool.Arn
 
-  # WelcomeEmailLambdaPermissionSNS:
-  #   Type: AWS::Lambda::Permission
-  #   Properties:
-  #     Action: lambda:InvokeFunction
-  #     FunctionName: !GetAtt WelcomeEmailLambda.Arn
-  #     Principal: sns.amazonaws.com
-  #     SourceArn: !Ref PostConfirmationSNSTopic
-
-  # VerifyEmailLambdaPermissionSNS:
-  #   Type: AWS::Lambda::Permission
-  #   Properties:
-  #     Action: lambda:InvokeFunction
-  #     FunctionName: !GetAtt VerifyEmailLambda.Arn
-  #     Principal: sns.amazonaws.com
-  #     SourceArn: !Ref PostConfirmationSNSTopic
-
-  # LambdaInvokePermissionSignin:
-  #   Type: AWS::Lambda::Permission
-  #   Properties:
-  #     FunctionName: !GetAtt SigninAlertLambda.Arn
-  #     Action: lambda:InvokeFunction
-  #     Principal: cognito-idp.amazonaws.com
-  #     SourceArn: !GetAtt CognitoUserPool.Arn
+  LambdaInvokePermissionSignin:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt SigninAlertLambda.Arn
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt CognitoUserPool.Arn
 
   # ===== Route 53 Health Checks =====
   ApiHealthCheck:

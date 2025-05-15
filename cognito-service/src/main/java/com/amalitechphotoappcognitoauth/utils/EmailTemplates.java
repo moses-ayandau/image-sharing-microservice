@@ -53,7 +53,7 @@ public class EmailTemplates {
             </head>
             <body>
                 <div class="header">
-                    <h1>Photo Blog App</h1>
+                    <h1>📸 Photo Blog App</h1>
                 </div>
                 <div class="content">
             """;
@@ -85,7 +85,7 @@ public class EmailTemplates {
                     <li>Discover amazing photos from other users</li>
                 </ul>
                 <p>Click the button below to start your journey:</p>
-                <p><a href="%s/auth/login" class="button">Login to Your Account</a></p>
+                <p><a href="%s/auth" class="button">Login to Your Account</a></p>
                 <p>If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
                 <p>Happy sharing!</p>
                 <p>The Photo Blog App Team</p>

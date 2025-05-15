@@ -139,7 +139,7 @@ Resources:
         DefaultAuthorizer: CognitoAuthorizer
         Authorizers:
           CognitoAuthorizer:
-            UserPoolArn: !GetAtt UserPool.Arn
+            UserPoolArn: !GetAtt CognitoUserPool.Arn
             Identity:
               Header: Authorization
         # Important: Add this to ensure OPTIONS requests bypass authorization
@@ -683,7 +683,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
-            Path: /images/{userId}/active
+            Path: /users/{userId}/images/active
             Method: get
       Tags:
         Environment: !Ref Environment
@@ -708,7 +708,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
-            Path: /images/{userId}/deleted
+            Path: /users/{userId}/images/deleted
             Method: get
       Tags:
         Environment: !Ref Environment

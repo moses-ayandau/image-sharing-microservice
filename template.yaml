@@ -507,7 +507,7 @@ Resources:
       AutoVerifiedAttributes:
         - email
       UsernameAttributes:
-        - email
+        - name
       MfaConfiguration: "OFF"
       Policies:
         PasswordPolicy:
@@ -557,7 +557,6 @@ Resources:
         - phone
         - email
         - openid
-        - profile
       AllowedOAuthFlowsUserPoolClient: true
       ReadAttributes:
         - email

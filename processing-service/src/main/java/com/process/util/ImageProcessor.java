@@ -55,7 +55,7 @@ public class ImageProcessor {
         g2d.drawImage(sourceImage, 0, 0, null);
 
         // Set up the font for the watermark
-        int fontSize = Math.max(sourceImage.getWidth(), sourceImage.getHeight()) / 20;
+        int fontSize = Math.max(sourceImage.getWidth(), sourceImage.getHeight()) / 30;
         g2d.setFont(new Font("Arial", Font.BOLD, fontSize));
 
         // Create the watermark text

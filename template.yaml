@@ -136,6 +136,13 @@ Resources:
         AllowOrigin: "'*'"
         MaxAge: "'3600'"
       Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt UserPool.Arn
+            Identity:
+              Header: Authorization
+        # Important: Add this to ensure OPTIONS requests bypass authorization
         AddDefaultAuthorizerToCorsPreflight: false
       MethodSettings:
         - ResourcePath: "/*"

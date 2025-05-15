@@ -1,3 +1,4 @@
+
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Integrated Image Processing System with Upload, Processing, Recycling, Authentication, and Health Monitoring
@@ -30,6 +31,7 @@ Parameters:
 
   AdminEmail:
     Type: String
+    Default: nicholas.oppong@amalitech.com
     Description: Email address to receive health check notifications
 
   HealthCheckPath:
@@ -131,9 +133,11 @@ Resources:
         - multipart/form-data
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-        AllowHeaders: "'Content-Type,Authorization'"
+        AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
         AllowOrigin: "'*'"
         MaxAge: "'3600'"
+      Auth:
+        AddDefaultAuthorizerToCorsPreflight: false
       MethodSettings:
         - ResourcePath: "/*"
           HttpMethod: "*"
@@ -142,65 +146,6 @@ Resources:
           LoggingLevel: INFO
       Tags:
         Environment: !Ref Environment
-      DefinitionBody:
-        swagger: '2.0'
-        info:
-          title: !Ref 'AWS::StackName'
-        paths:
-          /upload:
-            post:
-              x-amazon-apigateway-integration:
-                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UploadImageFunction.Arn}/invocations"
-                httpMethod: POST
-                type: aws_proxy
-          # /images/{photoId}/delete:
-          #   post:
-          #     x-amazon-apigateway-integration:
-          #       uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteImageFunction.Arn}/invocations"
-          #       httpMethod: POST
-          #       type: aws_proxy
-          # /images/{photoId}/restore:
-          #   post:
-          #     x-amazon-apigateway-integration:
-          #       uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RecoverImageFunction.Arn}/invocations"
-          #       httpMethod: POST
-          #       type: aws_proxy
-          # /images/{photoId}/permanent-delete:
-          #   delete:
-          #     x-amazon-apigateway-integration:
-          #       uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PermanentlyDeleteImageFunction.Arn}/invocations"
-          #       httpMethod: POST
-          #       type: aws_proxy
-          /health:
-            get:
-              x-amazon-apigateway-integration:
-                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${HealthCheckFunction.Arn}/invocations"
-                httpMethod: POST
-                type: aws_proxy
-          /health/component/{component}:
-            get:
-              x-amazon-apigateway-integration:
-                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ComponentHealthCheckFunction.Arn}/invocations"
-                httpMethod: POST
-                type: aws_proxy
-          /images/{userId}/active:
-            get:
-              x-amazon-apigateway-integration:
-                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetActiveImagesFunction.Arn}/invocations"
-                httpMethod: POST
-                type: aws_proxy
-          /images/{userId}/deleted:
-            get:
-              x-amazon-apigateway-integration:
-                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetDeletedImagesFunction.Arn}/invocations"
-                httpMethod: POST
-                type: aws_proxy
-          /images/share:
-            post:
-              x-amazon-apigateway-integration:
-                uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ShareImageFunction.Arn}/invocations"
-                httpMethod: POST
-                type: aws_proxy
   #    DependsOn: ApiGatewayAccount
 
   # SSL Certificate for domain
@@ -714,10 +659,13 @@ Resources:
       CodeUri: listing-service/
       Environment:
         Variables:
+          PROCESSED_IMAGES_BUCKET: !Ref ProcessedBucket
           IMAGE_TABLE: !Ref ImageTableName
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref PhotoTable
+        - S3ReadPolicy:
+            BucketName: !Ref ProcessedBucket
       Events:
         ApiEvent:
           Type: Api
@@ -736,10 +684,13 @@ Resources:
       CodeUri: listing-service/
       Environment:
         Variables:
+          PROCESSED_IMAGES_BUCKET: !Ref ProcessedBucket
           IMAGE_TABLE: !Ref ImageTableName
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref PhotoTable
+        - S3ReadPolicy:
+            BucketName: !Ref ProcessedBucket
       Events:
         ApiEvent:
           Type: Api
@@ -758,7 +709,8 @@ Resources:
       CodeUri: listing-service/
       Environment:
         Variables:
-          PROCESSED_BUCKET: !Ref ProcessedBucket
+          PROCESSED_IMAGES_BUCKET: !Ref ProcessedBucket
+          IMAGE_TABLE: !Ref ImageTableName
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref ProcessedBucket
@@ -1030,7 +982,7 @@ Resources:
                 - s3:GetBucketVersioning
                 - s3:GetBucketTagging
                 - s3:ListBucket
-              Resource: 
+              Resource:
                 - !Sub "arn:aws:s3:::${ProcessedBucket}"
                 - !Sub "arn:aws:s3:::${ProcessedBucket}/*"
             - Effect: Allow

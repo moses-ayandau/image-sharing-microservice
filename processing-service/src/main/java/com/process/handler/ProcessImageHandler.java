@@ -47,6 +47,7 @@ public class ProcessImageHandler implements RequestHandler<SQSEvent, String> {
                 String email = parts[3];
                 String firstName = parts[4];
                 String lastName = parts[5];
+                String imageTitle = parts[6];
 
                 context.getLogger().log("Message parts:");
                 context.getLogger().log("  Bucket: " + bucket);
@@ -61,7 +62,7 @@ public class ProcessImageHandler implements RequestHandler<SQSEvent, String> {
                     continue;
                 }
 
-                processImage.processImage(context, bucket, key, userId, email, firstName, lastName);
+                processImage.processImage(context, bucket, key, userId, email, firstName, lastName, imageTitle);
 
             } catch (Exception e) {
                 context.getLogger().log("Error processing message: " + e.getMessage());

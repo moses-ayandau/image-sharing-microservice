@@ -1,4 +1,4 @@
-package upload.util;
+package com.util;
 
 import org.junit.Test;
 

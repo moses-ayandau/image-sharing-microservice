@@ -7,7 +7,7 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import com.service.ImageService;
+import upload.service.ImageService;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
@@ -15,12 +15,12 @@ import java.util.Map;
 public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
     private final ImageService imageService;
     private final ObjectMapper objectMapper;
-    
+
     public App() {
         this.imageService = new ImageService();
         this.objectMapper = new ObjectMapper();
     }
-    
+
     /**
      * Handles incoming API Gateway requests for image uploads.
      * Processes the request, extracts user information from JWT token,
@@ -28,95 +28,168 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
      *
      * @param input   The API Gateway request event
      * @param context The Lambda execution context
-     * @return API Gateway response with status code and body
+     * @return API Gateway response with status code and body.
      */
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
         Map<String, String> headers = getCorsHeaders();
         
+        // Get the logger from the context
+        final var logger = context.getLogger();
+        
         try {
             if (input.getHttpMethod().equals("OPTIONS")) {
+                logger.log("Handling OPTIONS request");
                 return handleOptions(input, context);
             }    
             String body = input.getBody();
             JsonNode requestJson = objectMapper.readTree(body);
             
-
-            String token = input.getHeaders().get("Authorization");
-            if (token != null && token.startsWith("Bearer ")) {
-                token = token.substring(7); // Remove "Bearer " prefix
+            // Get token from request body if available, otherwise try header
+            String token;
+            if (requestJson.has("token")) {
+                token = requestJson.get("token").asText();
             } else {
-                throw new IllegalArgumentException("Missing or invalid Authorization token");
+                // Fall back to header
+                token = input.getHeaders().get("Authorization");
+                if (token != null && token.startsWith("Bearer ")) {
+                    token = token.substring(7); // Remove "Bearer " prefix
+                } else {
+                    logger.log("ERROR: No valid token found in request");
+                    throw new IllegalArgumentException("Authentication token is required");
+                }
             }
             
-            
-            String username = extractUsernameFromToken(token);
-            
+            String name = extractNameFromToken(token, logger);
+            String email = extractEmailFromToken(token, logger);
             
             String imageBase64 = requestJson.has("image") ? requestJson.get("image").asText() : null;
             String contentType = requestJson.has("contentType") ? requestJson.get("contentType").asText() : null;
             
+            // Extract imageTitle if provided
+            String imageTitle = null;
+            if (requestJson.has("imageTitle")) {
+                imageTitle = requestJson.get("imageTitle").asText();
+            }
+            
             if (imageBase64 == null || imageBase64.isEmpty()) {
+                logger.log("ERROR: Image data is required but was missing or empty");
                 throw new IllegalArgumentException("Image data is required");
             }
             
-            Map<String, Object> response = imageService.processImageUpload(username, imageBase64, contentType);
+            Map<String, Object> response = imageService.processImageUpload(name, email, imageBase64, contentType, imageTitle);
+            
+            // Ensure name and email are in the response
+            if (!response.containsKey("name")) {
+                response.put("name", name);
+            }
+            if (!response.containsKey("email")) {
+                response.put("email", email);
+            }
 
             return new APIGatewayProxyResponseEvent()
                 .withStatusCode(200)
                 .withHeaders(headers)
                 .withBody(objectMapper.writeValueAsString(response));
-                
         } catch (IllegalArgumentException e) {
+            logger.log("ERROR: Bad request - " + e.getMessage());
             Map<String, String> errorResponse = new HashMap<>();
             errorResponse.put("error", e.getMessage());
-            
+
             try {
                 return new APIGatewayProxyResponseEvent()
-                    .withStatusCode(400) 
-                    .withHeaders(headers)
-                    .withBody(objectMapper.writeValueAsString(errorResponse));
+                        .withStatusCode(400)
+                        .withHeaders(headers)
+                        .withBody(objectMapper.writeValueAsString(errorResponse));
             } catch (Exception ex) {
+                logger.log("ERROR: Failed to serialize error response - " + ex.getMessage());
                 return getErrorResponse(headers, ex);
             }
         } catch (Exception e) {
+            logger.log("ERROR: Internal server error - " + e.getMessage());
+            e.printStackTrace();
             return getErrorResponse(headers, e);
         }
     }
-    
+
     /**
-     * Extracts the username from a JWT token.
-     * Attempts to find username in common JWT claim fields.
+     * Extracts the name from a JWT token.
+     * Attempts to find name in common JWT claim fields.
      *
      * @param token The JWT token string
-     * @return The extracted username
-     * @throws IllegalArgumentException If username cannot be extracted
+     * @param logger The Lambda logger
+     * @return The extracted name
      */
-    private String extractUsernameFromToken(String token) {
+    private String extractNameFromToken(String token, com.amazonaws.services.lambda.runtime.LambdaLogger logger) {
         try {
             String[] parts = token.split("\\.");
             if (parts.length != 3) {
-                throw new IllegalArgumentException("Invalid JWT token format");
+                logger.log("Invalid JWT token format");
+                return "unknown-user";
             }
             
-            String payload = new String(Base64.getUrlDecoder().decode(parts[1]));
-            JsonNode payloadJson = objectMapper.readTree(payload);
-            
-
-            if (payloadJson.has("username")) {
-                return payloadJson.get("username").asText();
-            } else if (payloadJson.has("sub")) {
-                return payloadJson.get("sub").asText();
-            } else if (payloadJson.has("preferred_username")) {
-                return payloadJson.get("preferred_username").asText();
+            try {
+                String payload = new String(Base64.getUrlDecoder().decode(parts[1]));
+                JsonNode payloadJson = objectMapper.readTree(payload);
+                
+                // Look for "name" first, then fall back to other fields
+                if (payloadJson.has("name")) {
+                    return payloadJson.get("name").asText();
+                } else if (payloadJson.has("sub")) {
+                    return payloadJson.get("sub").asText();
+                } else if (payloadJson.has("cognito:name")) {
+                    return payloadJson.get("cognito:name").asText();
+                }
+                
+                logger.log("No name field found in token");
+                return "unknown-user";
+            } catch (Exception e) {
+                logger.log("Error decoding token payload: " + e.getMessage());
+                return "unknown-user";
             }
-            
-            throw new IllegalArgumentException("Username not found in token");
         } catch (Exception e) {
-            throw new IllegalArgumentException("Failed to extract username from token: " + e.getMessage());
+            logger.log("Failed to extract name from token: " + e.getMessage());
+            return "unknown-user";
         }
     }
-    
+
+    /**
+     * Extracts the email from a JWT token.
+     *
+     * @param token The JWT token string
+     * @param logger The Lambda logger
+     * @return The extracted email
+     */
+    private String extractEmailFromToken(String token, com.amazonaws.services.lambda.runtime.LambdaLogger logger) {
+        try {
+            String[] parts = token.split("\\.");
+            if (parts.length != 3) {
+                logger.log("Invalid JWT token format");
+                return "unknown-email";
+            }
+            
+            try {
+                String payload = new String(Base64.getUrlDecoder().decode(parts[1]));
+                JsonNode payloadJson = objectMapper.readTree(payload);
+                
+                if (payloadJson.has("email")) {
+                    return payloadJson.get("email").asText();
+                } else if (payloadJson.has("mail")) {
+                    return payloadJson.get("mail").asText();
+                }
+                
+                logger.log("No email field found in token");
+                return "unknown-email";
+            } catch (Exception e) {
+                logger.log("Error decoding token payload: " + e.getMessage());
+                return "unknown-email";
+            }
+        } catch (Exception e) {
+            logger.log("Failed to extract email from token: " + e.getMessage());
+            return "unknown-email";
+        }
+    }
+
     /**
      * Creates an error response with the given exception message.
      *
@@ -127,20 +200,20 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
     private APIGatewayProxyResponseEvent getErrorResponse(Map<String, String> headers, Exception e) {
         Map<String, String> errorResponse = new HashMap<>();
         errorResponse.put("error", e.getMessage());
-        
+
         try {
             return new APIGatewayProxyResponseEvent()
-                .withStatusCode(500)
-                .withHeaders(headers)
-                .withBody(objectMapper.writeValueAsString(errorResponse));
+                    .withStatusCode(500)
+                    .withHeaders(headers)
+                    .withBody(objectMapper.writeValueAsString(errorResponse));
         } catch (Exception ex) {
             return new APIGatewayProxyResponseEvent()
-                .withStatusCode(500)
-                .withHeaders(headers)
-                .withBody("{\"error\": \"Internal server error\"}");
+                    .withStatusCode(500)
+                    .withHeaders(headers)
+                    .withBody("{\"error\": \"Internal server error\"}");
         }
     }
-    
+
     /**
      * Handles OPTIONS requests for CORS preflight.
      *
@@ -149,12 +222,13 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
      * @return API Gateway response with CORS headers
      */
     public APIGatewayProxyResponseEvent handleOptions(APIGatewayProxyRequestEvent input, Context context) {
+        context.getLogger().log("Handling OPTIONS request with CORS headers");
         return new APIGatewayProxyResponseEvent()
-            .withStatusCode(200)
-            .withHeaders(getCorsHeaders())
-            .withBody("");
+                .withStatusCode(200)
+                .withHeaders(getCorsHeaders())
+                .withBody("");
     }
-    
+
     /**
      * Creates a map of CORS headers for cross-origin requests.
      *

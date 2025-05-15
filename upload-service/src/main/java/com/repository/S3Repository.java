@@ -1,42 +1,45 @@
-package upload.repository;
+package com.repository;
 
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.amazonaws.services.s3.model.ObjectMetadata;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
-
-/**
- * Repository for S3 operations.
- */
 public class S3Repository {
-    private final AmazonS3 s3Client;
+    private final S3Client s3Client;
     private final String bucketName;
 
     public S3Repository() {
-        this.s3Client = AmazonS3ClientBuilder.standard().build();
-        this.bucketName = System.getenv("STAGING_BUCKET");
+        this.s3Client = S3Client.builder()
+                .region(Region.US_EAST_1)
+                .build();
+        this.bucketName = System.getenv("BUCKET_NAME");
     }
 
-    
-    public S3Repository(AmazonS3 s3Client, String bucketName) {
+    public S3Repository(S3Client s3Client, String bucketName) {
         this.s3Client = s3Client;
         this.bucketName = bucketName;
     }
 
     /**
-     * Uploads file to S3 bucket and returns public URL.
+     * Uploads a file to the S3 bucket.
+     *
+     * @param fileName    The name/path to use for the file in S3
+     * @param fileData    The binary content of the file
+     * @param contentType The MIME type of the file
+     * @return The URL to the uploaded file
      */
     public String uploadFile(String fileName, byte[] fileData, String contentType) {
-        ObjectMetadata metadata = new ObjectMetadata();
-        metadata.setContentLength(fileData.length);
-        metadata.setContentType(contentType);
+        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                .bucket(bucketName)
+                .key(fileName)
+                .contentType(contentType)
+                .build();
         
-        InputStream inputStream = new ByteArrayInputStream(fileData);
+        PutObjectResponse response = s3Client.putObject(putObjectRequest,
+                RequestBody.fromBytes(fileData));
         
-        s3Client.putObject(bucketName, fileName, inputStream, metadata);
-        
-        return s3Client.getUrl(bucketName, fileName).toString();
+        return String.format("https://%s.s3.amazonaws.com/%s", bucketName, fileName);
     }
 }

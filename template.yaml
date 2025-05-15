@@ -683,7 +683,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
-            Path: /images/{userId}/active
+            Path: /users/{userId}/images/active
             Method: get
       Tags:
         Environment: !Ref Environment
@@ -708,7 +708,7 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref ApiGateway
-            Path: /images/{userId}/deleted
+            Path: /users/{userId}/images/deleted
             Method: get
       Tags:
         Environment: !Ref Environment

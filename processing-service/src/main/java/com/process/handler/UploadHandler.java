@@ -48,6 +48,7 @@ public class UploadHandler implements RequestHandler<APIGatewayProxyRequestEvent
             String firstName = "";
             String lastName = "";
             String email = "";
+            String imageTitle = "";
             byte[] imageData = null;
 
             // Try to get parameters from query string
@@ -80,6 +81,7 @@ public class UploadHandler implements RequestHandler<APIGatewayProxyRequestEvent
                     if (jsonBody.containsKey("firstName")) firstName = (String) jsonBody.get("firstName");
                     if (jsonBody.containsKey("lastName")) lastName = (String) jsonBody.get("lastName");
                     if (jsonBody.containsKey("email")) email = (String) jsonBody.get("email");
+                    if (jsonBody.containsKey("imageTitle")) imageTitle = (String) jsonBody.get("imageTitle");
 
                     // Get image from JSON as base64
                     if (jsonBody.containsKey("image")) {
@@ -165,7 +167,7 @@ public class UploadHandler implements RequestHandler<APIGatewayProxyRequestEvent
 
             // Queue for processing via SQS
             context.getLogger().log("Queueing image for processing");
-            sqsService.queueForRetry(bucketName, fileName, userId, email, firstName, lastName);
+            sqsService.queueForRetry(bucketName, fileName, userId, email, firstName, lastName, imageTitle);
 
             // Return success response
             String fileUrl = s3Client.getUrl(bucketName, fileName).toString();

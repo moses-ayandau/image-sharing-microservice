@@ -7,21 +7,33 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import com.utils.DynamoDBUtils;
 import com.utils.ResponseUtils;
 import com.utils.S3Utils;
-import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 
 import java.util.Map;
 
 
-@Slf4j
 public class DeleteImageHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
-    private final String tableName = System.getenv("IMAGE_TABLE");
-    private final String bucketName = System.getenv("PRIMARY_BUCKET");
-
     private static final String S3_KEY = "S3Key";
+    private final String tableName;
+    private final String bucketName;
 
-    S3Utils s3Utils = new S3Utils();
-    DynamoDBUtils dynamoUtils = new DynamoDBUtils();
+   private final S3Utils s3Utils;
+   private final DynamoDBUtils dynamoUtils;
+
+    public DeleteImageHandler() {
+        this.tableName = System.getenv("IMAGE_TABLE");
+        this.bucketName = System.getenv("PRIMARY_BUCKET");
+        this.s3Utils = new S3Utils();
+        this.dynamoUtils = new DynamoDBUtils();
+    }
+
+    // for test injection
+    public DeleteImageHandler(String tableName, String bucketName, S3Utils s3Utils, DynamoDBUtils dynamoUtils) {
+        this.tableName = tableName;
+        this.bucketName = bucketName;
+        this.s3Utils = s3Utils;
+        this.dynamoUtils = dynamoUtils;
+    }
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent request, Context context) {
@@ -47,10 +59,11 @@ public class DeleteImageHandler implements RequestHandler<APIGatewayProxyRequest
             } catch (RuntimeException e) {
                 return ResponseUtils.errorResponse(404, "Image not found in database");
             }
+
             s3Utils.validateOwnership(item, userId);
 
             if (!item.containsKey(S3_KEY) || item.get(S3_KEY) == null || item.get(S3_KEY).s() == null || item.get(S3_KEY).s().isEmpty()) {
-                return ResponseUtils.errorResponse(500, "Corrupt image record: missing or invalid S3Key");
+                return ResponseUtils.errorResponse(404, "Corrupt image record: missing or invalid S3Key");
             }
             String oldKey = item.get(S3_KEY).s();
             String newKey = oldKey.replaceFirst("main/", "recycle/");

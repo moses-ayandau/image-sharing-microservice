@@ -28,25 +28,47 @@ public class ResponseUtils {
                 .withHeaders(headers);
     }
 
-    public static APIGatewayProxyResponseEvent successResponse( int statusCode, Object data) throws JsonProcessingException {
+    public static APIGatewayProxyResponseEvent successResponse(int statusCode, Object data) throws JsonProcessingException {
         return createResponse()
                 .withStatusCode(statusCode)
                 .withBody(objectMapper.writeValueAsString(data));
     }
 
-    public static APIGatewayProxyResponseEvent errorResponse( int statusCode, String message) {
+    public static APIGatewayProxyResponseEvent errorResponse(int statusCode, String message) {
         Map<String, String> errorBody = new HashMap<>();
-        errorBody.put("error", message);
+        errorBody.put("message", message);
 
         try {
             return createResponse()
                     .withStatusCode(statusCode)
-                    .withBody(objectMapper.writeValueAsString(errorBody));
+                    .withBody(serializeErrorBody(errorBody));
         } catch (JsonProcessingException e) {
             // Fallback if JSON serialization fails
             return createResponse()
                     .withStatusCode(statusCode)
-                    .withBody("{\"error\":\"" + message + "\"}");
+                    .withBody("{\"message\":\"" + message + "\"}");
+        }
+    }
+
+    // Protected method to allow testing the exception path
+    protected static String serializeErrorBody(Map<String, String> errorBody) throws JsonProcessingException {
+        return objectMapper.writeValueAsString(errorBody);
+    }
+
+    // Method added for testing purposes - simulates errorResponse but allows overriding serialization
+    protected APIGatewayProxyResponseEvent customErrorResponse(int statusCode, String message) {
+        Map<String, String> errorBody = new HashMap<>();
+        errorBody.put("message", message);
+
+        try {
+            return createResponse()
+                    .withStatusCode(statusCode)
+                    .withBody(serializeErrorBody(errorBody));
+        } catch (JsonProcessingException e) {
+            // Fallback if JSON serialization fails
+            return createResponse()
+                    .withStatusCode(statusCode)
+                    .withBody("{\"message\":\"" + message + "\"}");
         }
     }
 }

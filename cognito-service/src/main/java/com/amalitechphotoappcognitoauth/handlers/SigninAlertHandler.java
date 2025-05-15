@@ -38,10 +38,8 @@ public class SigninAlertHandler implements RequestHandler<Object, Object> {
             CognitoEvent event = objectMapper.convertValue(input, CognitoEvent.class);
             logger.info("Trigger source: {}", event.getTriggerSource());
 
-            // Check if this is a post authentication event
-            if (event.getTriggerSource() != null &&
-                    event.getTriggerSource().equals("PostAuthentication_Authentication")) {
-
+            // Send sign-in alert only for PostAuthentication trigger
+            if (isSignInTrigger(event.getTriggerSource())) {
                 String email = event.getUserEmail();
                 String name = event.getUserDisplayName();
 
@@ -72,7 +70,7 @@ public class SigninAlertHandler implements RequestHandler<Object, Object> {
                     logger.error("Failed to send sign-in alert email to: {}", email);
                 }
             } else {
-                logger.info("Not an authentication event. Skipping sign-in alert.");
+                logger.info("Not a sign-in event. Skipping sign-in alert.");
             }
         } catch (Exception e) {
             logger.error("Error processing sign-in alert", e);
@@ -83,6 +81,16 @@ public class SigninAlertHandler implements RequestHandler<Object, Object> {
 
         // Return the input event as required by Cognito triggers
         return input;
+    }
+
+    /**
+     * Check if the trigger source indicates a sign-in event
+     *
+     * @param triggerSource The trigger source from the Cognito event
+     * @return true if it's a sign-in trigger, false otherwise
+     */
+    private boolean isSignInTrigger(String triggerSource) {
+        return "PostAuthentication_Authentication".equals(triggerSource);
     }
 
     /**

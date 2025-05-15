@@ -25,22 +25,21 @@ public class DynamoDbService {
     }
 
 
-    public void storeImageMetadata(String userId, String imageKey, String firstName, String lastName, String imageUrl) {
+    public void storeImageMetadata(String userId, String imageKey, String imageTitle,  String imageUrl) {
         try {
             Map<String, AttributeValue> item = new HashMap<>();
 
             item.put("userId", AttributeValue.builder().s(userId).build());
             item.put("imageKey", AttributeValue.builder().s(imageKey).build());
 
-            item.put("firstName", AttributeValue.builder().s(firstName).build());
-            item.put("lastName", AttributeValue.builder().s(lastName).build());
+
+//            item.put("firstName", AttributeValue.builder().s(firstName).build());
+//            item.put("lastName", AttributeValue.builder().s(lastName).build());
             item.put("processedDate", AttributeValue.builder().s(Instant.now().toString()).build());
             item.put("imageUrl", AttributeValue.builder().s(imageUrl).build());
-            item.put("status", AttributeValue.fromS("ACTIVE"));
+            item.put("status", AttributeValue.fromS("active"));
+            item.put("title", AttributeValue.builder().s(imageTitle).build());
 
-
-            long ttl = Instant.now().plus(30, ChronoUnit.DAYS).getEpochSecond();
-            item.put("ttl", AttributeValue.builder().n(String.valueOf(ttl)).build());
 
             PutItemRequest request = PutItemRequest.builder()
                     .tableName(tableName)

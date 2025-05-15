@@ -1,3 +1,4 @@
+
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Integrated Image Processing System with Upload, Processing, Recycling, Authentication, and Health Monitoring
@@ -981,7 +982,7 @@ Resources:
                 - s3:GetBucketVersioning
                 - s3:GetBucketTagging
                 - s3:ListBucket
-              Resource: 
+              Resource:
                 - !Sub "arn:aws:s3:::${ProcessedBucket}"
                 - !Sub "arn:aws:s3:::${ProcessedBucket}/*"
             - Effect: Allow

@@ -72,12 +72,12 @@ public class SqsService {
     }
 
 
-    public void queueForRetry(String bucket, String key, String userId, String email, String firstName, String lastName) {
+    public void queueForRetry(String bucket, String key, String userId, String email, String firstName, String lastName, String imageTitle) {
         try {
             String url = getQueueUrl();
 
-            String messageBody = String.format("%s,%s,%s,%s,%s,%s",
-                    bucket, key, userId, email, firstName, lastName);
+            String messageBody = String.format("%s,%s,%s,%s,%s,%s %s",
+                    bucket, key, userId, email, firstName, lastName, imageTitle);
 
             SendMessageRequest sendMsgRequest = SendMessageRequest.builder()
                     .queueUrl(url)

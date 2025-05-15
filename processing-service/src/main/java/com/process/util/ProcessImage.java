@@ -83,7 +83,7 @@ public class ProcessImage {
 
             // Queue message to RetryQueue for reprocessing
             context.getLogger().log("Queuing image for retry: " + key);
-            sqsService.queueForRetry(bucket, key, userId, email, firstName, lastName);
+            sqsService.queueForRetry(bucket, key, userId, email, firstName, lastName, imageTitle);
 
             throw new RuntimeException("Failed to process image", e);
         }

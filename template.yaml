@@ -227,6 +227,12 @@ Resources:
               Status: Disabled
             Filter:
               Prefix: ""  # Replicate all objects; modify if needed
+      LifecycleConfiguration:
+        Rules:
+          - Id: AutoDeleteAfter30Days
+            Prefix: recycle/
+            Status: Enabled
+            ExpirationInDays: 30
 
   DestinationBucket:
     Type: AWS::S3::Bucket
@@ -734,86 +740,86 @@ Resources:
         Environment: !Ref Environment
 
   # ===== Lambda Functions: Recycle Bin Feature =====
-  # DeleteImageFunction:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     FunctionName: !Sub "image-delete-function-${Environment}"
-  #     CodeUri: recycle-service/
-  #     Handler: com.handlers.DeleteImageHandler::handleRequest
-  #     Description: Moves images to the recycle bin
-  #     Environment:
-  #       Variables:
-  #         PRIMARY_BUCKET: !Ref ProcessedBucket
-  #         IMAGE_TABLE: !Ref ImageTableName
-  #         RECYCLE_BUCKET: !Ref RecycleBinBucket
-  #         ENVIRONMENT: !Ref Environment
-  #     Policies:
-  #       - DynamoDBCrudPolicy:
-  #           TableName: !Ref PhotoTable
-  #       - S3CrudPolicy:
-  #           BucketName: !Ref ProcessedBucket
-  #       - S3CrudPolicy:
-  #           BucketName: !Ref RecycleBinBucket
-  #     Events:
-  #       ApiEvent:
-  #         Type: Api
-  #         Properties:
-  #           RestApiId: !Ref ApiGateway
-  #           Path: /images/{photoId}/delete
-  #           Method: post
+  DeleteImageFunction:
+     Type: AWS::Serverless::Function
+     Properties:
+       FunctionName: !Sub "image-delete-function-${Environment}"
+       CodeUri: recycle-service/
+       Handler: com.handlers.DeleteImageHandler::handleRequest
+       Description: Moves images to the recycle bin
+       Environment:
+         Variables:
+           PRIMARY_BUCKET: !Ref ProcessedBucket
+           IMAGE_TABLE: !Ref ImageTableName
+           RECYCLE_BUCKET: !Ref RecycleBinBucket
+           ENVIRONMENT: !Ref Environment
+       Policies:
+         - DynamoDBCrudPolicy:
+             TableName: !Ref PhotoTable
+         - S3CrudPolicy:
+             BucketName: !Ref ProcessedBucket
+         - S3CrudPolicy:
+             BucketName: !Ref RecycleBinBucket
+       Events:
+         ApiEvent:
+           Type: Api
+           Properties:
+             RestApiId: !Ref ApiGateway
+             Path: /images/{photoId}/delete
+             Method: post
 
-  # RecoverImageFunction:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     FunctionName: !Sub "image-recover-function-${Environment}"
-  #     CodeUri: recycle-service/
-  #     Handler: com.handlers.RecoverImageHandler::handleRequest
-  #     Description: Restores images from the recycle bin
-  #     Environment:
-  #       Variables:
-  #         PRIMARY_BUCKET: !Ref ProcessedBucket
-  #         IMAGE_TABLE: !Ref ImageTableName
-  #         RECYCLE_BUCKET: !Ref RecycleBinBucket
-  #         ENVIRONMENT: !Ref Environment
-  #     Policies:
-  #       - DynamoDBCrudPolicy:
-  #           TableName: !Ref PhotoTable
-  #       - S3CrudPolicy:
-  #           BucketName: !Ref ProcessedBucket
-  #       - S3CrudPolicy:
-  #           BucketName: !Ref RecycleBinBucket
-  #     Events:
-  #       ApiEvent:
-  #         Type: Api
-  #         Properties:
-  #           RestApiId: !Ref ApiGateway
-  #           Path: /images/{photoId}/restore
-  #           Method: post
+  RecoverImageFunction:
+     Type: AWS::Serverless::Function
+     Properties:
+       FunctionName: !Sub "image-recover-function-${Environment}"
+       CodeUri: recycle-service/
+       Handler: com.handlers.RecoverImageHandler::handleRequest
+       Description: Restores images from the recycle bin
+       Environment:
+         Variables:
+           PRIMARY_BUCKET: !Ref ProcessedBucket
+           IMAGE_TABLE: !Ref ImageTableName
+           RECYCLE_BUCKET: !Ref RecycleBinBucket
+           ENVIRONMENT: !Ref Environment
+       Policies:
+         - DynamoDBCrudPolicy:
+             TableName: !Ref PhotoTable
+         - S3CrudPolicy:
+             BucketName: !Ref ProcessedBucket
+         - S3CrudPolicy:
+             BucketName: !Ref RecycleBinBucket
+       Events:
+         ApiEvent:
+           Type: Api
+           Properties:
+             RestApiId: !Ref ApiGateway
+             Path: /images/{photoId}/restore
+             Method: post
 
-  # PermanentlyDeleteImageFunction:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     FunctionName: !Sub "image-permanent-delete-function-${Environment}"
-  #     CodeUri: recycle-service/
-  #     Handler: com.handlers.PermanentlyDeleteImageHandler::handleRequest
-  #     Description: Permanently deletes images from the recycle bin
-  #     Environment:
-  #       Variables:
-  #         IMAGE_TABLE: !Ref ImageTableName
-  #         RECYCLE_BUCKET: !Ref RecycleBinBucket
-  #         ENVIRONMENT: !Ref Environment
-  #     Policies:
-  #       - DynamoDBCrudPolicy:
-  #           TableName: !Ref PhotoTable
-  #       - S3CrudPolicy:
-  #           BucketName: !Ref RecycleBinBucket
-  #     Events:
-  #       ApiEvent:
-  #         Type: Api
-  #         Properties:
-  #           RestApiId: !Ref ApiGateway
-  #           Path: /images/{photoId}/permanent-delete
-  #           Method: delete
+  PermanentlyDeleteImageFunction:
+     Type: AWS::Serverless::Function
+     Properties:
+       FunctionName: !Sub "image-permanent-delete-function-${Environment}"
+       CodeUri: recycle-service/
+       Handler: com.handlers.PermanentlyDeleteImageHandler::handleRequest
+       Description: Permanently deletes images from the recycle bin
+       Environment:
+         Variables:
+           IMAGE_TABLE: !Ref ImageTableName
+           RECYCLE_BUCKET: !Ref RecycleBinBucket
+           ENVIRONMENT: !Ref Environment
+       Policies:
+         - DynamoDBCrudPolicy:
+             TableName: !Ref PhotoTable
+         - S3CrudPolicy:
+             BucketName: !Ref RecycleBinBucket
+       Events:
+         ApiEvent:
+           Type: Api
+           Properties:
+             RestApiId: !Ref ApiGateway
+             Path: /images/{photoId}/permanent-delete
+             Method: delete
 
   # ===== Lambda Functions: Authentication =====
   PostConfirmationLambda:

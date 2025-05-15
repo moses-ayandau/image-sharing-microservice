@@ -6,6 +6,8 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 
+import java.util.Map;
+
 public class S3Repository {
     private final S3Client s3Client;
     private final String bucketName;
@@ -14,7 +16,7 @@ public class S3Repository {
         this.s3Client = S3Client.builder()
                 .region(Region.US_EAST_1)
                 .build();
-        this.bucketName = System.getenv("BUCKET_NAME");
+        this.bucketName = System.getenv("STAGING_BUCKET");
     }
 
     public S3Repository(S3Client s3Client, String bucketName) {
@@ -23,7 +25,42 @@ public class S3Repository {
     }
 
     /**
-     * Uploads a file to the S3 bucket.
+     * Uploads a file to the S3 bucket with metadata.
+     *
+     * @param fileName    The name/path to use for the file in S3
+     * @param fileData    The binary content of the file
+     * @param contentType The MIME type of the file
+     * @param metadata    Additional metadata to attach to the S3 object
+     * @return The URL to the uploaded file
+     */
+    public String uploadFile(String fileName, byte[] fileData, String contentType, Map<String, String> metadata) {
+        // Create object metadata
+        PutObjectRequest.Builder requestBuilder = PutObjectRequest.builder()
+                .bucket(bucketName)
+                .key(fileName)
+                .contentLength((long) fileData.length)
+                .contentType(contentType);
+        
+        // Add custom metadata
+        if (metadata != null) {
+            requestBuilder.metadata(metadata);
+        }
+        
+        // Upload the file
+        PutObjectResponse response = s3Client.putObject(
+                requestBuilder.build(),
+                RequestBody.fromBytes(fileData)
+        );
+        
+        // Return the URL to the uploaded file
+        return String.format("https://%s.s3.%s.amazonaws.com/%s", 
+                bucketName, 
+                Region.EU_CENTRAL_1.toString(), 
+                fileName);
+    }
+
+    /**
+     * Uploads a file to the S3 bucket without additional metadata.
      *
      * @param fileName    The name/path to use for the file in S3
      * @param fileData    The binary content of the file
@@ -31,15 +68,6 @@ public class S3Repository {
      * @return The URL to the uploaded file
      */
     public String uploadFile(String fileName, byte[] fileData, String contentType) {
-        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                .bucket(bucketName)
-                .key(fileName)
-                .contentType(contentType)
-                .build();
-        
-        PutObjectResponse response = s3Client.putObject(putObjectRequest,
-                RequestBody.fromBytes(fileData));
-        
-        return String.format("https://%s.s3.amazonaws.com/%s", bucketName, fileName);
+        return uploadFile(fileName, fileData, contentType, null);
     }
 }

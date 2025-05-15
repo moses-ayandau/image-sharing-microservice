@@ -1,4 +1,4 @@
-package upload.repository;
+package com.repository;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.ObjectMetadata;

@@ -1,4 +1,4 @@
-package upload.repository;
+package com.repository;
 
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.model.MessageAttributeValue;

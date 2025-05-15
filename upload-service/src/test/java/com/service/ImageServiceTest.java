@@ -1,4 +1,4 @@
-package upload.service;
+package com.service;
 
 import org.junit.Before;
 import org.junit.Test;

@@ -9,14 +9,14 @@ public class AwsFactory {
     public static S3Client s3Client(){
         return  S3Client.builder()
                 .credentialsProvider(DefaultCredentialsProvider.create())
-                .region(Region.EU_CENTRAL_1)
+                .region(Region.US_EAST_1)
                 .build();
 
     }
     public static DynamoDbClient dynamoDbClient() {
         return DynamoDbClient.builder()
                 .credentialsProvider(DefaultCredentialsProvider.create())
-                .region(Region.EU_CENTRAL_1)
+                .region(Region.US_EAST_1)
                 .build();
     }
 

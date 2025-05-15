@@ -79,6 +79,4 @@ public class DeleteImageHandler implements RequestHandler<APIGatewayProxyRequest
             return ResponseUtils.errorResponse(500, "Internal server error");
         }
     }
-
-
 }

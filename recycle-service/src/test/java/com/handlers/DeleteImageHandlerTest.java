@@ -46,7 +46,7 @@ public class DeleteImageHandlerTest {
         mockHandler = new DeleteImageHandler("MockTable", "mock-bucket", mockS3Utils, mockDynamoUtils);
         request = new APIGatewayProxyRequestEvent();
 
-        Map<String, String> pathParams = Map.of("imageId", "image123");
+        Map<String, String> pathParams = Map.of("imageKey", "image123");
         Map<String, String> queryParams = Map.of("userId", "user123");
 
         request.setPathParameters(pathParams);
@@ -99,12 +99,12 @@ public class DeleteImageHandlerTest {
 
     @Test
     void testMissingOrEmptyImageId() {
-        request.setPathParameters(Map.of("imageId", ""));
+        request.setPathParameters(Map.of("imageKey", ""));
 
         APIGatewayProxyResponseEvent response = mockHandler.handleRequest(request, mockContext);
 
         assertEquals(400, response.getStatusCode());
-        assertEquals("{\"message\":\"Missing or empty imageId\"}", response.getBody());
+        assertEquals("{\"message\":\"Missing or empty imageKey\"}", response.getBody());
     }
 
     @Test
@@ -184,7 +184,7 @@ public class DeleteImageHandlerTest {
         APIGatewayProxyResponseEvent response = mockHandler.handleRequest(request, mockContext);
 
         assertEquals(400, response.getStatusCode());
-        assertEquals("{\"message\":\"Missing or empty imageId\"}", response.getBody());
+        assertEquals("{\"message\":\"Missing or empty imageKey\"}", response.getBody());
     }
 
     @Test

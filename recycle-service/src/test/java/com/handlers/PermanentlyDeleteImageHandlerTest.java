@@ -53,7 +53,7 @@ public class PermanentlyDeleteImageHandlerTest {
     @Test
     public void testHandleRequest_Success() {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
-        request.setPathParameters(Map.of("imageId", IMAGE_ID));
+        request.setPathParameters(Map.of("imageKey", IMAGE_ID));
         request.setQueryStringParameters(Map.of("userId", USER_ID));
 
         String IMAGE_TABLE = System.getenv("IMAGE_TABLE");
@@ -109,7 +109,7 @@ public class PermanentlyDeleteImageHandlerTest {
     @Test
     public void testHandleRequest_MissingQueryParameters() {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
-        request.setPathParameters(Map.of("imageId", IMAGE_ID));
+        request.setPathParameters(Map.of("imageKey", IMAGE_ID));
 
         try (MockedStatic<ResponseUtils> mockedResponseUtils = mockStatic(ResponseUtils.class)) {
             APIGatewayProxyResponseEvent expectedResponse = new APIGatewayProxyResponseEvent()
@@ -127,13 +127,13 @@ public class PermanentlyDeleteImageHandlerTest {
     @Test
     public void testHandleRequest_EmptyImageId() {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
-        request.setPathParameters(Map.of("imageId", ""));
+        request.setPathParameters(Map.of("imageKey", ""));
         request.setQueryStringParameters(Map.of("userId", USER_ID));
 
         try (MockedStatic<ResponseUtils> mockedResponseUtils = mockStatic(ResponseUtils.class)) {
             APIGatewayProxyResponseEvent expectedResponse = new APIGatewayProxyResponseEvent()
                     .withStatusCode(400)
-                    .withBody("{\"error\":\"Missing or empty 'imageId'\"}");
+                    .withBody("{\"error\":\"Missing or empty 'imageKey'\"}");
             mockedResponseUtils.when(() -> ResponseUtils.errorResponse(any(Integer.class), any(String.class)))
                     .thenReturn(expectedResponse);
 
@@ -146,7 +146,7 @@ public class PermanentlyDeleteImageHandlerTest {
     @Test
     public void testHandleRequest_EmptyUserId() {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
-        request.setPathParameters(Map.of("imageId", IMAGE_ID));
+        request.setPathParameters(Map.of("imageKey", IMAGE_ID));
         request.setQueryStringParameters(Map.of("userId", "  "));
 
         try (MockedStatic<ResponseUtils> mockedResponseUtils = mockStatic(ResponseUtils.class)) {
@@ -165,7 +165,7 @@ public class PermanentlyDeleteImageHandlerTest {
     @Test
     public void testHandleRequest_MissingS3Key() {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
-        request.setPathParameters(Map.of("imageId", IMAGE_ID));
+        request.setPathParameters(Map.of("imageKey", IMAGE_ID));
         request.setQueryStringParameters(Map.of("userId", USER_ID));
 
         Map<String, AttributeValue> item = new HashMap<>();
@@ -187,7 +187,7 @@ public class PermanentlyDeleteImageHandlerTest {
     @Test
     public void testHandleRequest_NullS3Key() {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
-        request.setPathParameters(Map.of("imageId", IMAGE_ID));
+        request.setPathParameters(Map.of("imageKey", IMAGE_ID));
         request.setQueryStringParameters(Map.of("userId", USER_ID));
 
         Map<String, AttributeValue> item = new HashMap<>();
@@ -210,7 +210,7 @@ public class PermanentlyDeleteImageHandlerTest {
     @Test
     public void testHandleRequest_EmptyS3Key() {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
-        request.setPathParameters(Map.of("imageId", IMAGE_ID));
+        request.setPathParameters(Map.of("imageKey", IMAGE_ID));
         request.setQueryStringParameters(Map.of("userId", USER_ID));
 
         Map<String, AttributeValue> item = new HashMap<>();
@@ -233,7 +233,7 @@ public class PermanentlyDeleteImageHandlerTest {
     @Test
     public void testHandleRequest_NotInRecycleBin() {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
-        request.setPathParameters(Map.of("imageId", IMAGE_ID));
+        request.setPathParameters(Map.of("imageKey", IMAGE_ID));
         request.setQueryStringParameters(Map.of("userId", USER_ID));
 
         String nonRecycleKey = "images/test-image.jpg";
@@ -257,7 +257,7 @@ public class PermanentlyDeleteImageHandlerTest {
     @Test
     public void testHandleRequest_OwnershipValidationException() {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
-        request.setPathParameters(Map.of("imageId", IMAGE_ID));
+        request.setPathParameters(Map.of("imageKey", IMAGE_ID));
         request.setQueryStringParameters(Map.of("userId", USER_ID));
 
         Map<String, AttributeValue> item = new HashMap<>();
@@ -283,7 +283,7 @@ public class PermanentlyDeleteImageHandlerTest {
     @Test
     public void testHandleRequest_S3DeleteException() {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
-        request.setPathParameters(Map.of("imageId", IMAGE_ID));
+        request.setPathParameters(Map.of("imageKey", IMAGE_ID));
         request.setQueryStringParameters(Map.of("userId", USER_ID));
 
         Map<String, AttributeValue> item = new HashMap<>();
@@ -309,7 +309,7 @@ public class PermanentlyDeleteImageHandlerTest {
     @Test
     public void testHandleRequest_DynamoDeleteException() {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
-        request.setPathParameters(Map.of("imageId", IMAGE_ID));
+        request.setPathParameters(Map.of("imageKey", IMAGE_ID));
         request.setQueryStringParameters(Map.of("userId", USER_ID));
 
         Map<String, AttributeValue> item = new HashMap<>();
@@ -335,7 +335,7 @@ public class PermanentlyDeleteImageHandlerTest {
     @Test
     public void testHandleRequest_GetItemFromDynamoException() {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
-        request.setPathParameters(Map.of("imageId", IMAGE_ID));
+        request.setPathParameters(Map.of("imageKey", IMAGE_ID));
         request.setQueryStringParameters(Map.of("userId", USER_ID));
 
         RuntimeException dynamoException = new RuntimeException("DynamoDB get error");
@@ -357,7 +357,7 @@ public class PermanentlyDeleteImageHandlerTest {
     @Test
     public void testHandleRequest_EmptyDynamoResponse() {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
-        request.setPathParameters(Map.of("imageId", IMAGE_ID));
+        request.setPathParameters(Map.of("imageKey", IMAGE_ID));
         request.setQueryStringParameters(Map.of("userId", USER_ID));
 
         when(mockDynamoUtils.getItemFromDynamo(anyString(), anyString())).thenReturn(Collections.emptyMap());

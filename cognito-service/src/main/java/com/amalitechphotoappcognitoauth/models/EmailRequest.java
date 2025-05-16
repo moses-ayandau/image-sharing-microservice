@@ -14,7 +14,6 @@ public class EmailRequest {
         this.htmlBody = htmlBody;
     }
 
-    // Getters and setters
     public String getRecipient() {
         return recipient;
     }

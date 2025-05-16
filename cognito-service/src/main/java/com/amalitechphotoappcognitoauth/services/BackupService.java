@@ -14,10 +14,23 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * The type Backup service.
+ */
 public class BackupService {
 
     private static final int MAX_DYNAMODB_ITEM_SIZE = 390000; // 390KB, leaving margin for attribute names and overhead
 
+    /**
+     * Backup user pool configuration.
+     *
+     * @param cognitoClient  the cognito client
+     * @param dynamoDbClient the dynamo db client
+     * @param userPoolId     the user pool id
+     * @param backupTable    the backup table
+     * @param gson           the gson
+     * @param context        the context
+     */
     public static void backupUserPoolConfiguration(CognitoIdentityProviderClient cognitoClient,
                                                    DynamoDbClient dynamoDbClient,
                                                    String userPoolId,
@@ -26,23 +39,30 @@ public class BackupService {
                                                    Context context) {
         context.getLogger().log("Backing up user pool configuration");
 
-        // Get user pool details
         DescribeUserPoolResponse userPoolDetails = cognitoClient.describeUserPool(
                 DescribeUserPoolRequest.builder()
                         .userPoolId(userPoolId)
                         .build());
 
-        // Create backup ID and timestamp
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmmss"));
         String backupId = UUID.randomUUID().toString();
 
-        // Convert user pool details to JSON
         String userPoolJson = gson.toJson(userPoolDetails.userPool());
 
         // Store in DynamoDB
         storeInDynamoDB(backupId, "CONFIG", timestamp, userPoolJson, context, dynamoDbClient, backupTable, userPoolId);
     }
 
+    /**
+     * Backup user data.
+     *
+     * @param cognitoClient  the cognito client
+     * @param dynamoDbClient the dynamo db client
+     * @param userPoolId     the user pool id
+     * @param backupTable    the backup table
+     * @param gson           the gson
+     * @param context        the context
+     */
     public static void backupUserData(CognitoIdentityProviderClient cognitoClient,
                                       DynamoDbClient dynamoDbClient,
                                       String userPoolId,
@@ -51,16 +71,14 @@ public class BackupService {
                                       Context context) {
         context.getLogger().log("Backing up user data");
 
-        // List to store all users
         List<Map<String, Object>> users = new ArrayList<>();
 
         // Set up request to list users
         ListUsersRequest listUsersRequest = ListUsersRequest.builder()
                 .userPoolId(userPoolId)
-                .limit(60) // Adjust based on your needs
+                .limit(60)
                 .build();
 
-        // Use paginator to handle pagination
         ListUsersIterable listUsersResponses = cognitoClient.listUsersPaginator(listUsersRequest);
         int userCount = 0;
 
@@ -75,7 +93,6 @@ public class BackupService {
                 userMap.put("userCreateDate", user.userCreateDate().toString());
                 userMap.put("userLastModifiedDate", user.userLastModifiedDate().toString());
 
-                // Process attributes
                 Map<String, String> attributes = new HashMap<>();
                 if (user.hasAttributes()) {
                     attributes = user.attributes().stream()
@@ -97,11 +114,9 @@ public class BackupService {
             }
         }
 
-        // Create backup ID and timestamp
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmmss"));
         String backupId = UUID.randomUUID().toString();
 
-        // Convert users to JSON
         String usersJson = gson.toJson(users);
 
         // Store in DynamoDB, potentially splitting into chunks if needed
@@ -110,6 +125,18 @@ public class BackupService {
         context.getLogger().log("Backed up " + userCount + " users");
     }
 
+    /**
+     * Store in dynamo db.
+     *
+     * @param backupId       the backup id
+     * @param backupType     the backup type
+     * @param timestamp      the timestamp
+     * @param data           the data
+     * @param context        the context
+     * @param dynamoDbClient the dynamo db client
+     * @param backupTable    the backup table
+     * @param userPoolId     the user pool id
+     */
     public static void storeInDynamoDB(String backupId,
                                        String backupType,
                                        String timestamp,
@@ -141,6 +168,19 @@ public class BackupService {
         }
     }
 
+    /**
+     * Store in dynamo db with chunking.
+     *
+     * @param backupId       the backup id
+     * @param backupType     the backup type
+     * @param timestamp      the timestamp
+     * @param data           the data
+     * @param userCount      the user count
+     * @param context        the context
+     * @param dynamoDbClient the dynamo db client
+     * @param backupTable    the backup table
+     * @param userPoolId     the user pool id
+     */
     public static void storeInDynamoDBWithChunking(String backupId,
                                                    String backupType,
                                                    String timestamp,

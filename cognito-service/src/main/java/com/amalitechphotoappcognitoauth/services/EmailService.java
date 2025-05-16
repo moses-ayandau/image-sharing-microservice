@@ -24,7 +24,6 @@ public class EmailService {
                 .region(Region.of(System.getenv("AWS_REGION") != null ? System.getenv("AWS_REGION") : "eu-west-1"))
                 .build();
     }
-
     public EmailService() {
         this.sourceEmail = System.getenv("EMAIL_SOURCE") != null ?
                 System.getenv("EMAIL_SOURCE") : "noreply@mscv2group2.link";

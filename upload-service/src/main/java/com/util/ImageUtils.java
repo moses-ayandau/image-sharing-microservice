@@ -25,4 +25,26 @@ public class ImageUtils {
     public static String getExtensionFromContentType(String contentType) {
         return contentType.equals("image/png") ? ".png" : ".jpg";
     }
+    
+    /**
+     * Sanitizes a filename by removing invalid characters and limiting length
+     * 
+     * @param fileName The filename to sanitize
+     * @return A sanitized filename
+     */
+    public static String sanitizeFileName(String fileName) {
+        if (fileName == null) {
+            return "unnamed";
+        }
+        
+        // Replace invalid characters with underscores
+        String sanitized = fileName.replaceAll("[^a-zA-Z0-9.-]", "_");
+        
+        // Limit length to 255 characters (common filesystem limit)
+        if (sanitized.length() > 255) {
+            sanitized = sanitized.substring(0, 255);
+        }
+        
+        return sanitized;
+    }
 }

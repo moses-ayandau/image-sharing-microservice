@@ -7,18 +7,23 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import upload.service.ImageService;
+import com.service.ImageService;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 
 public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
-    private final ImageService imageService;
+    private ImageService imageService;
     private final ObjectMapper objectMapper;
 
     public App() {
         this.imageService = new ImageService();
         this.objectMapper = new ObjectMapper();
+    }
+    
+    // Setter for ImageService - needed for testing
+    public void setImageService(ImageService imageService) {
+        this.imageService = imageService;
     }
 
     /**

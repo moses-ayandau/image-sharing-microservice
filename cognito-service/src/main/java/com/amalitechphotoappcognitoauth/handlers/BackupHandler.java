@@ -26,17 +26,20 @@ public class BackupHandler implements RequestHandler<ScheduledEvent, String> {
     private final Gson gson;
 
     public BackupHandler() {
-        // Initialize AWS clients
-        this.cognitoClient = CognitoIdentityProviderClient.builder()
-                .region(Region.EU_CENTRAL_1)
-                .build();
-        this.dynamoDbClient = DynamoDbClient.builder()
-                .region(Region.EU_CENTRAL_1)
-                .build();
-
         // Get environment variables
         this.userPoolId = System.getenv("USER_POOL_ID");
         this.backupTable = System.getenv("BACKUP_TABLE");
+        
+        // Get region from environment or use the same region as the Lambda function
+        String region = System.getenv("AWS_REGION") != null ? System.getenv("AWS_REGION") : "us-east-1";
+        
+        // Initialize AWS clients with the correct region
+        this.cognitoClient = CognitoIdentityProviderClient.builder()
+                .region(Region.of(region))
+                .build();
+        this.dynamoDbClient = DynamoDbClient.builder()
+                .region(Region.of(region))
+                .build();
 
         // Initialize Gson with custom type adapter for Instant
         this.gson = new GsonBuilder()

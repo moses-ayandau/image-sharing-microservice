@@ -1,5 +1,6 @@
-package com.process.util;
+package com.process.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.GetQueueUrlRequest;
@@ -8,12 +9,15 @@ import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
 import software.amazon.awssdk.services.sqs.model.SqsException;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.logging.Logger;
 
 public class SqsService {
     private final SqsClient sqsClient;
     private final String queueName;
     private String queueUrl;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public SqsService(Region region, String queueName) {
         this.sqsClient = SqsClient.builder().region(region).build();
@@ -21,7 +25,6 @@ public class SqsService {
 
         System.out.println("SqsService initialized with queueName: " + queueName + " in region: " + region.id());
     }
-
 
     private String getQueueUrl() {
         if (queueUrl != null) {
@@ -71,13 +74,22 @@ public class SqsService {
         throw new RuntimeException("Could not get queue URL for " + queueName + " after " + maxRetries + " attempts");
     }
 
-
-    public void queueForRetry(String bucket, String key, String userId, String email, String firstName, String lastName) {
+    public void queueForRetry(String bucket, String key, String userId, String email, String firstName, String lastName, String imageTitle) {
         try {
             String url = getQueueUrl();
 
-            String messageBody = String.format("%s,%s,%s,%s,%s,%s",
-                    bucket, key, userId, email, firstName, lastName);
+            // Create a map for message data - this handles missing values gracefully
+            Map<String, String> messageData = new HashMap<>();
+            messageData.put("bucket", bucket);
+            messageData.put("key", key);
+            messageData.put("userId", userId);
+            messageData.put("email", email);
+            messageData.put("firstName", firstName);
+            messageData.put("lastName", lastName);
+            messageData.put("imageTitle", imageTitle);
+
+            // Convert map to JSON string
+            String messageBody = objectMapper.writeValueAsString(messageData);
 
             SendMessageRequest sendMsgRequest = SendMessageRequest.builder()
                     .queueUrl(url)
@@ -85,11 +97,12 @@ public class SqsService {
                     .build();
 
             sqsClient.sendMessage(sendMsgRequest);
+            System.out.println("Message successfully queued for processing: " + key);
         } catch (Exception e) {
-            Logger.getAnonymousLogger().info("WARNING: Image was uploaded successfully but could not be queued for processing. " +
-                    "The image will need to be processed manually.");
-
-
+            Logger.getAnonymousLogger().warning("WARNING: Image was uploaded successfully but could not be queued for processing: " +
+                    e.getMessage());
+            e.printStackTrace();
+            Logger.getAnonymousLogger().info("The image will need to be processed manually.");
         }
     }
 }

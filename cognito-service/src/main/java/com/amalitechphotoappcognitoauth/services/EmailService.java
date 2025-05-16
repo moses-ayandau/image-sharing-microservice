@@ -16,19 +16,17 @@ import com.amalitechphotoappcognitoauth.models.EmailRequest;
 
 public class EmailService {
     private static final Logger logger = LoggerFactory.getLogger(EmailService.class);
-    private final SesClient sesClient;
+    private static final SesClient sesClient;
     private final String sourceEmail;
 
-    public EmailService() {
-        // Get the source email from environment variables with a fallback
-        this.sourceEmail = System.getenv("EMAIL_SOURCE") != null ?
-                System.getenv("EMAIL_SOURCE") : "noreply@mscv2group2.link";
-
-        // Create the SES client with a default region if not specified
-        this.sesClient = SesClient.builder()
+    static {
+        sesClient = SesClient.builder()
                 .region(Region.of(System.getenv("AWS_REGION") != null ? System.getenv("AWS_REGION") : "eu-west-1"))
                 .build();
-
+    }
+    public EmailService() {
+        this.sourceEmail = System.getenv("EMAIL_SOURCE") != null ?
+                System.getenv("EMAIL_SOURCE") : "noreply@mscv2group2.link";
         logger.info("EmailService initialized with source email: {}", sourceEmail);
     }
 

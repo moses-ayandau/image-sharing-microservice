@@ -8,7 +8,7 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.process.util.SqsService;
+import com.process.service.SqsService;
 import software.amazon.awssdk.regions.Region;
 
 import java.io.ByteArrayInputStream;
@@ -48,6 +48,7 @@ public class UploadHandler implements RequestHandler<APIGatewayProxyRequestEvent
             String firstName = "";
             String lastName = "";
             String email = "";
+            String imageTitle = "";
             byte[] imageData = null;
 
             // Try to get parameters from query string
@@ -80,6 +81,7 @@ public class UploadHandler implements RequestHandler<APIGatewayProxyRequestEvent
                     if (jsonBody.containsKey("firstName")) firstName = (String) jsonBody.get("firstName");
                     if (jsonBody.containsKey("lastName")) lastName = (String) jsonBody.get("lastName");
                     if (jsonBody.containsKey("email")) email = (String) jsonBody.get("email");
+                    if (jsonBody.containsKey("imageTitle")) imageTitle = (String) jsonBody.get("imageTitle");
 
                     // Get image from JSON as base64
                     if (jsonBody.containsKey("image")) {
@@ -161,11 +163,11 @@ public class UploadHandler implements RequestHandler<APIGatewayProxyRequestEvent
             );
 
             // Generate unique userId for this upload if not provided
-            String userId = UUID.randomUUID().toString();
+            String userId = "4e265c14-4fe1-4a56-ac07-914a5d0bf99c";
 
             // Queue for processing via SQS
             context.getLogger().log("Queueing image for processing");
-            sqsService.queueForRetry(bucketName, fileName, userId, email, firstName, lastName);
+            sqsService.queueForRetry(bucketName, fileName, userId, email, firstName, lastName, imageTitle);
 
             // Return success response
             String fileUrl = s3Client.getUrl(bucketName, fileName).toString();
@@ -176,7 +178,8 @@ public class UploadHandler implements RequestHandler<APIGatewayProxyRequestEvent
                     "firstName", firstName,
                     "lastName", lastName,
                     "email", email,
-                    "dateOfUpload", dateOfUpload
+                    "dateOfUpload", dateOfUpload,
+                    "imageTitle", imageTitle
             ));
 
             return new APIGatewayProxyResponseEvent()

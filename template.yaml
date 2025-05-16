@@ -15,7 +15,7 @@ Parameters:
 
   ImageTableName:
     Type: String
-    Default: !Sub "image-table-${Environment}"
+    Default: photo
     Description: Name of the DynamoDB table for storing image metadata
 
   RetryQueueName:
@@ -145,11 +145,7 @@ Resources:
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
         AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
-        AllowOrigins:
-          - "'http://localhost:8080'"
-          - "'https://mscv2group2.link'"
-          - "'https://dev.d3nsvx32qio5q5.amplifyapp.com'"
-
+        AllowOrigin: "'http://localhost:8080,https://mscv2group2.link,https://dev.d3nsvx32qio5q5.amplifyapp.com'"
         MaxAge: "'3600'"
       Auth:
         DefaultAuthorizer: CognitoAuthorizer
@@ -188,7 +184,7 @@ Resources:
       CorsConfiguration:
         CorsRules:
           - AllowedHeaders:
-              - "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              - "Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token"
             AllowedMethods:
               - GET
               - PUT
@@ -196,9 +192,9 @@ Resources:
               - DELETE
               - HEAD
             AllowedOrigins:
-              - "'http://localhost:8080'"
-              - "'https://mscv2group2.link'"
-              - "'https://dev.d3nsvx32qio5q5.amplifyapp.com'"
+              - "http://localhost:8080"
+              - "https://mscv2group2.link"
+              - "https://dev.d3nsvx32qio5q5.amplifyapp.com"
             MaxAge: 3600
       LifecycleConfiguration:
         Rules:
@@ -220,14 +216,14 @@ Resources:
       CorsConfiguration:
         CorsRules:
           - AllowedHeaders:
-              - "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              - "Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token"
             AllowedMethods:
               - GET
               - HEAD
             AllowedOrigins:
-              - "'http://localhost:8080'"
-              - "'https://mscv2group2.link'"
-              - "'https://dev.d3nsvx32qio5q5.amplifyapp.com'"
+              - "http://localhost:8080"
+              - "https://mscv2group2.link"
+              - "https://dev.d3nsvx32qio5q5.amplifyapp.com"
             MaxAge: 3600
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -255,7 +251,6 @@ Resources:
 
   DestinationBucket:
     Type: AWS::S3::Bucket
-    Condition: IsDRRegion
     Properties:
       BucketName: !Sub "image-processed-replica-${Environment}-${AWS::AccountId}"
       VersioningConfiguration:
@@ -332,6 +327,8 @@ Resources:
     Properties:
       TableName: !Ref ImageTableName
       BillingMode: PAY_PER_REQUEST
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
       AttributeDefinitions:
         - AttributeName: userId
           AttributeType: S
@@ -344,8 +341,6 @@ Resources:
       KeySchema:
         - AttributeName: imageKey
           KeyType: HASH
-        - AttributeName: userId
-          AttributeType: S
         - AttributeName: imageUrl
           KeyType: RANGE
       GlobalSecondaryIndexes:
@@ -435,7 +430,7 @@ Resources:
                 Action:
                   - cognito-idp:ListUsers
                   - cognito-idp:DescribeUserPool
-                Resource: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}"
+                Resource: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPool}"
               - Effect: Allow
                 Action:
                   - dynamodb:PutItem
@@ -458,7 +453,7 @@ Resources:
       Role: !GetAtt CognitoBackupRole.Arn
       Environment:
         Variables:
-          USER_POOL_ID: !Ref UserPoolId
+          USER_POOL_ID: !Ref CognitoUserPool
           BACKUP_TABLE: !Ref TableName
       Events:
         ScheduledBackup:
@@ -589,7 +584,7 @@ Resources:
       AutoVerifiedAttributes:
         - email
       UsernameAttributes:
-        - name
+        - email
       MfaConfiguration: "OFF"
       Policies:
         PasswordPolicy:
@@ -831,15 +826,13 @@ Resources:
          Variables:
            PRIMARY_BUCKET: !Ref ProcessedBucket
            IMAGE_TABLE: !Ref ImageTableName
-           RECYCLE_BUCKET: !Ref RecycleBinBucket
            ENVIRONMENT: !Ref Environment
        Policies:
          - DynamoDBCrudPolicy:
              TableName: !Ref PhotoTable
          - S3CrudPolicy:
              BucketName: !Ref ProcessedBucket
-         - S3CrudPolicy:
-             BucketName: !Ref RecycleBinBucket
+
        Events:
          ApiEvent:
            Type: Api
@@ -859,15 +852,13 @@ Resources:
          Variables:
            PRIMARY_BUCKET: !Ref ProcessedBucket
            IMAGE_TABLE: !Ref ImageTableName
-           RECYCLE_BUCKET: !Ref RecycleBinBucket
            ENVIRONMENT: !Ref Environment
        Policies:
          - DynamoDBCrudPolicy:
              TableName: !Ref PhotoTable
          - S3CrudPolicy:
              BucketName: !Ref ProcessedBucket
-         - S3CrudPolicy:
-             BucketName: !Ref RecycleBinBucket
+
        Events:
          ApiEvent:
            Type: Api
@@ -886,13 +877,13 @@ Resources:
        Environment:
          Variables:
            IMAGE_TABLE: !Ref ImageTableName
-           RECYCLE_BUCKET: !Ref RecycleBinBucket
+           RECYCLE_BUCKET: !Ref ProcessedBucket
            ENVIRONMENT: !Ref Environment
        Policies:
          - DynamoDBCrudPolicy:
              TableName: !Ref PhotoTable
          - S3CrudPolicy:
-             BucketName: !Ref RecycleBinBucket
+             BucketName: !Ref ProcessedBucket
        Events:
          ApiEvent:
            Type: Api
@@ -1474,12 +1465,6 @@ Outputs:
     Value: !Ref ProcessedBucket
     Export:
       Name: !Sub "${AWS::StackName}-ProcessedBucketName"
-
-  RecycleBinBucketName:
-    Description: "Recycle bin bucket name"
-    Value: !Ref RecycleBinBucket
-    Export:
-      Name: !Sub "${AWS::StackName}-RecycleBinBucketName"
 
   ImageTableName:
     Description: "DynamoDB table for image metadata"

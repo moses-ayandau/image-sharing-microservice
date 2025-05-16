@@ -16,7 +16,7 @@ import com.amalitechphotoappcognitoauth.models.EmailRequest;
 
 public class EmailService {
     private static final Logger logger = LoggerFactory.getLogger(EmailService.class);
-    private static final SesClient sesClient;
+    static SesClient sesClient;
     private final String sourceEmail;
 
     static {
@@ -30,6 +30,10 @@ public class EmailService {
         logger.info("EmailService initialized with source email: {}", sourceEmail);
     }
 
+    static void setSesClientForTesting(SesClient client) {
+        sesClient = client;
+    }
+
     /**
      * Sends an email using Amazon SES
      *
@@ -40,7 +44,6 @@ public class EmailService {
         try {
             logger.info("Sending email to: {}", request.getRecipient());
 
-            // Create the email content
             Content subject = Content.builder()
                     .data(request.getSubject())
                     .build();
@@ -58,14 +61,12 @@ public class EmailService {
                     .body(body)
                     .build();
 
-            // Create the email request
             SendEmailRequest emailRequest = SendEmailRequest.builder()
                     .source(sourceEmail)
                     .destination(Destination.builder().toAddresses(request.getRecipient()).build())
                     .message(message)
                     .build();
 
-            // Send the email
             SendEmailResponse response = sesClient.sendEmail(emailRequest);
             logger.info("Email sent! Message ID: {}", response.messageId());
             return true;

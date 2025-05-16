@@ -17,6 +17,9 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import java.io.IOException;
 import java.time.Instant;
 
+/**
+ * The type Backup handler.
+ */
 public class BackupHandler implements RequestHandler<ScheduledEvent, String> {
 
     private final CognitoIdentityProviderClient cognitoClient;
@@ -25,6 +28,9 @@ public class BackupHandler implements RequestHandler<ScheduledEvent, String> {
     private final String backupTable;
     private final Gson gson;
 
+    /**
+     * Instantiates a new Backup handler.
+     */
     public BackupHandler() {
         // Get environment variables
         this.userPoolId = System.getenv("USER_POOL_ID");
@@ -70,10 +76,8 @@ public class BackupHandler implements RequestHandler<ScheduledEvent, String> {
         context.getLogger().log("Starting Cognito user pool backup for pool: " + userPoolId);
 
         try {
-            // Backup user pool configuration
             BackupService.backupUserPoolConfiguration(cognitoClient, dynamoDbClient, userPoolId, backupTable, gson, context);
 
-            // Backup user data
             BackupService.backupUserData(cognitoClient, dynamoDbClient, userPoolId, backupTable, gson, context);
 
             String successMessage = "Cognito user pool backup completed successfully";

@@ -68,7 +68,7 @@ public class RecoverImageHandlerTest {
     @Test
     void testHandleRequest_MissingUserId() {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent()
-                .withBody("{\"imageId\": \"image123\"}")
+                .withBody("{\"imageKey\": \"image123\"}")
                 .withHeaders(new HashMap<>());
 
         APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
@@ -84,35 +84,35 @@ public class RecoverImageHandlerTest {
 
         APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
         assertEquals(500, response.getStatusCode());
-        assertFalse(response.getBody().contains("Missing imageId"));
+        assertFalse(response.getBody().contains("Missing imageKey"));
     }
 
     @Test
     void testHandleRequest_SuccessfulRecovery() {
         String userId = "user123";
-        String imageId = "image123";
-        String recycleKey = "recycle/" + userId + "/" + imageId;
-        String originalKey = "main/" + userId + "/" + imageId;
+        String imageKey = "image123";
+        String recycleKey = "recycle/" + userId + "/" + imageKey;
+        String originalKey = "main/" + userId + "/" + imageKey;
 
         Map<String, AttributeValue> mockItem = Map.of("userId", AttributeValue.fromS(userId));
 
-        when(mockDynamoDBUtils.getItemFromDynamo(tableName, imageId)).thenReturn(mockItem);
+        when(mockDynamoDBUtils.getItemFromDynamo(tableName, imageKey)).thenReturn(mockItem);
         when(mockS3Utils.validateOwnership(mockItem, userId)).thenReturn(null);
 
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent()
                 .withHeaders(Map.of("userId", userId))
-                .withBody("{\"imageId\": \"" + imageId + "\"}");
+                .withBody("{\"imageKey\": \"" + imageKey + "\"}");
 
         APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
 
         verify(mockS3Utils).validateOwnership(mockItem, userId);
         verify(mockS3Utils).copyObject(bucketName, recycleKey, originalKey);
         verify(mockS3Utils).deleteObject(bucketName, recycleKey);
-        verify(mockDynamoDBUtils).updateImageStatus(tableName, imageId, "active");
-        verify(mockDynamoDBUtils).updateS3Key(tableName, imageId, originalKey);
+        verify(mockDynamoDBUtils).updateImageStatus(tableName, imageKey, "active");
+        verify(mockDynamoDBUtils).updateS3Key(tableName, imageKey, originalKey);
 
         assertEquals(200, response.getStatusCode());
-        assertTrue(response.getBody().contains("Image recovered: " + imageId));
+        assertTrue(response.getBody().contains("Image recovered: " + imageKey));
     }
 
 

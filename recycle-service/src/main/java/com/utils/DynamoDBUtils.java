@@ -9,7 +9,7 @@ import java.util.Map;
 
 public class DynamoDBUtils {
 
-    public static final String IMAGE_ID = "imageId";
+    public static final String IMAGE_ID = "imageKey";
     private final DynamoDbClient dynamoDbClient;
 
     public DynamoDBUtils() {
@@ -18,10 +18,10 @@ public class DynamoDBUtils {
 
 
 
-    public Map<String, AttributeValue> getItemFromDynamo(String tableName, String imageId) {
+    public Map<String, AttributeValue> getItemFromDynamo(String tableName, String imageKey) {
         GetItemRequest request = GetItemRequest.builder()
                 .tableName(tableName)
-                .key(Map.of(IMAGE_ID, AttributeValue.fromS(imageId)))
+                .key(Map.of(IMAGE_ID, AttributeValue.fromS(imageKey)))
                 .build();
 
         GetItemResponse response = dynamoDbClient.getItem(request);
@@ -32,22 +32,22 @@ public class DynamoDBUtils {
     }
 
 
-    public void deleteRecordFromDynamo(String tableName, String imageId) {
+    public void deleteRecordFromDynamo(String tableName, String imageKey) {
         DeleteItemRequest request = DeleteItemRequest.builder()
                 .tableName(tableName)
-                .key(Map.of(IMAGE_ID, AttributeValue.fromS(imageId)))
+                .key(Map.of(IMAGE_ID, AttributeValue.fromS(imageKey)))
                 .build();
 
         dynamoDbClient.deleteItem(request);
     }
 
-    public void updateImageStatus(String tableName, String imageId, String status) {
+    public void updateImageStatus(String tableName, String imageKey, String status) {
         Map<String, AttributeValue> values = new HashMap<>();
         values.put(":status", AttributeValue.fromS(status));
 
         UpdateItemRequest request = UpdateItemRequest.builder()
                 .tableName(tableName)
-                .key(Map.of(IMAGE_ID, AttributeValue.fromS(imageId)))
+                .key(Map.of(IMAGE_ID, AttributeValue.fromS(imageKey)))
                 .updateExpression("SET #status = :status")
                 .expressionAttributeNames(Map.of("#status", "status"))
                 .expressionAttributeValues(values)
@@ -56,9 +56,9 @@ public class DynamoDBUtils {
         dynamoDbClient.updateItem(request);
     }
 
-    public void updateS3Key(String tableName, String imageId, String newS3Key) {
+    public void updateS3Key(String tableName, String imageKey, String newS3Key) {
         Map<String, AttributeValue> key = Map.of(
-                IMAGE_ID, AttributeValue.fromS(imageId)
+                IMAGE_ID, AttributeValue.fromS(imageKey)
         );
 
         Map<String, AttributeValue> expressionAttributeValues = Map.of(

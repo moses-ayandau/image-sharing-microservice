@@ -43,7 +43,7 @@ public class DynamoDBUtilsTest {
     @Test
     void testGetItemFromDynamo_Success() {
         Map<String, AttributeValue> expectedItem = new HashMap<>();
-        expectedItem.put("imageId", AttributeValue.fromS(IMAGE_ID_VALUE));
+        expectedItem.put("imageKey", AttributeValue.fromS(IMAGE_ID_VALUE));
         expectedItem.put("status", AttributeValue.fromS("PROCESSED"));
 
         GetItemResponse mockResponse = GetItemResponse.builder()

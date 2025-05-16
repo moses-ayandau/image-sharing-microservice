@@ -18,6 +18,8 @@ import java.lang.reflect.Field;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -71,14 +73,14 @@ class BackupHandlerTest {
     @Test
     void handleRequest_Success() {
         try (MockedStatic<BackupService> mockedBackupService = mockStatic(BackupService.class)) {
-            // Mock the static methods in BackupService
+            // Mock the static methods in BackupService using doNothing() for void methods
             mockedBackupService.when(() -> BackupService.backupUserPoolConfiguration(
                     any(), any(), anyString(), anyString(), any(), any()))
-                    .thenReturn(null);
+                    .thenAnswer(invocation -> null); // Use thenAnswer(invocation -> null) for void methods
             
             mockedBackupService.when(() -> BackupService.backupUserData(
                     any(), any(), anyString(), anyString(), any(), any()))
-                    .thenReturn(null);
+                    .thenAnswer(invocation -> null); // Use thenAnswer(invocation -> null) for void methods
             
             // Execute the handler
             String result = handler.handleRequest(event, context);
@@ -159,7 +161,7 @@ class BackupHandlerTest {
             // Mock the static methods in BackupService - second one throws exception
             mockedBackupService.when(() -> BackupService.backupUserPoolConfiguration(
                     any(), any(), anyString(), anyString(), any(), any()))
-                    .thenReturn(null);
+                    .thenAnswer(invocation -> null); // Use thenAnswer(invocation -> null) for void methods
             
             mockedBackupService.when(() -> BackupService.backupUserData(
                     any(), any(), anyString(), anyString(), any(), any()))

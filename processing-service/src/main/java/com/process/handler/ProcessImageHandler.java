@@ -4,6 +4,10 @@ import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.SQSEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.process.service.DynamoDbService;
+import com.process.service.EmailService;
+import com.process.service.S3Service;
+import com.process.service.SqsService;
 import com.process.util.*;
 
 import java.util.Map;
@@ -57,7 +61,6 @@ public class ProcessImageHandler implements RequestHandler<SQSEvent, String> {
                 context.getLogger().log("  Bucket: " + bucket);
                 context.getLogger().log("  Key: " + key);
                 context.getLogger().log("  UserId: " + userId);
-                context.getLogger().log("  Email: " + email);
                 context.getLogger().log("  FirstName: " + firstName);
                 context.getLogger().log("  LastName: " + lastName);
                 context.getLogger().log("  ImageTitle: " + imageTitle);

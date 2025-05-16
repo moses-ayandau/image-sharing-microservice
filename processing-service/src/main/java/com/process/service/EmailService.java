@@ -1,4 +1,4 @@
-package com.process.util;
+package com.process.service;
 
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.ses.SesClient;

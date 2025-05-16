@@ -15,7 +15,7 @@ Parameters:
 
   ImageTableName:
     Type: String
-    Default: photo
+    Default: !Sub "image-table-${Environment}"
     Description: Name of the DynamoDB table for storing image metadata
 
   RetryQueueName:
@@ -68,13 +68,25 @@ Parameters:
     Default: Z07888711CCI43RK69LKQ
     Description: Route 53 Hosted Zone ID
 
-  DestinationRegion:
+  DRRegion:
     Type: String
-    Default: us-west-2
+    Default: eu-central-1
 
-  ReplicaRegions:
-    Type: CommaDelimitedList
-    Default: us-west-2, eu-west-1
+  PrimaryRegion:
+    Type: String
+    Default: us-east-1
+    Description: The primary region for the DynamoDB table
+  BackupSchedule:
+    Type: String
+    Default: rate(24 hours)
+    Description: Schedule expression for backup (e.g., rate(24 hours) or cron(0 1 * * ? *))
+  TableName:
+    Type: String
+    Default: CognitoBackups
+    Description: Name of the DynamoDB table for storing backups
+
+Conditions:
+  IsDRRegion: !Equals [!Ref AWS::Region, !Ref DRRegion]
 
 Globals:
   Function:
@@ -133,7 +145,11 @@ Resources:
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
         AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
-        AllowOrigin: "'*'"
+        AllowOrigins:
+          - "'http://localhost:8080'"
+          - "'https://mscv2group2.link'"
+          - "'https://dev.d3nsvx32qio5q5.amplifyapp.com'"
+
         MaxAge: "'3600'"
       Auth:
         DefaultAuthorizer: CognitoAuthorizer
@@ -172,7 +188,7 @@ Resources:
       CorsConfiguration:
         CorsRules:
           - AllowedHeaders:
-              - '*'
+              - "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
             AllowedMethods:
               - GET
               - PUT
@@ -180,7 +196,9 @@ Resources:
               - DELETE
               - HEAD
             AllowedOrigins:
-              - '*'
+              - "'http://localhost:8080'"
+              - "'https://mscv2group2.link'"
+              - "'https://dev.d3nsvx32qio5q5.amplifyapp.com'"
             MaxAge: 3600
       LifecycleConfiguration:
         Rules:
@@ -198,16 +216,18 @@ Resources:
     Properties:
       BucketName: !Sub "image-processed-bucket-${Environment}-${AWS::AccountId}"
       VersioningConfiguration:
-        Status: Enabled  # Enable versioning
+        Status: Enabled
       CorsConfiguration:
         CorsRules:
           - AllowedHeaders:
-              - '*'
+              - "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
             AllowedMethods:
               - GET
               - HEAD
             AllowedOrigins:
-              - '*'
+              - "'http://localhost:8080'"
+              - "'https://mscv2group2.link'"
+              - "'https://dev.d3nsvx32qio5q5.amplifyapp.com'"
             MaxAge: 3600
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -225,7 +245,7 @@ Resources:
             DeleteMarkerReplication:
               Status: Disabled
             Filter:
-              Prefix: ""  # Replicate all objects; modify if needed
+              Prefix: ""
       LifecycleConfiguration:
         Rules:
           - Id: AutoDeleteAfter30Days
@@ -235,10 +255,11 @@ Resources:
 
   DestinationBucket:
     Type: AWS::S3::Bucket
+    Condition: IsDRRegion
     Properties:
       BucketName: !Sub "image-processed-replica-${Environment}-${AWS::AccountId}"
       VersioningConfiguration:
-        Status: Enabled  # Enable versioning
+        Status: Enabled
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         IgnorePublicAcls: true
@@ -304,73 +325,39 @@ Resources:
               - s3:GetBucketVersioning
             Resource: !Sub "arn:aws:s3:::image-processed-replica-${Environment}-${AWS::AccountId}"
 
-  RecycleBinBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "image-recycle-bin-${Environment}-${AWS::AccountId}"
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        IgnorePublicAcls: true
-        BlockPublicPolicy: true
-        RestrictPublicBuckets: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: AutoDeleteAfter30Days
-            Prefix: recycle/
-            Status: Enabled
-            ExpirationInDays: 30
-
-  # CognitoBackupBucket:
-  #   Type: AWS::S3::Bucket
-  #   Properties:
-  #     BucketName: !Sub "photo-blog-cognito-backups-${Environment}"
-  #     VersioningConfiguration:
-  #       Status: Enabled
-  #     BucketEncryption:
-  #       ServerSideEncryptionConfiguration:
-  #         - ServerSideEncryptionByDefault:
-  #             SSEAlgorithm: AES256
-  #     LifecycleConfiguration:
-  #       Rules:
-  #         - Id: DeleteOldBackups
-  #           Status: Enabled
-  #           ExpirationInDays: 90
-  #     PublicAccessBlockConfiguration:
-  #       BlockPublicAcls: true
-  #       IgnorePublicAcls: true
-  #       BlockPublicPolicy: true
-  #       RestrictPublicBuckets: true
 
   # ===== DynamoDB Tables =====
   PhotoTable:
-    Type: AWS::DynamoDB::Table
+    Type: AWS::DynamoDB::GlobalTable
     Properties:
       TableName: !Ref ImageTableName
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: userId
           AttributeType: S
+        - AttributeName: imageKey
+          AttributeType: S
         - AttributeName: imageUrl
           AttributeType: S
         - AttributeName: status
           AttributeType: S
       KeySchema:
-        - AttributeName: userId
-          AttributeType: S
         - AttributeName: imageKey
           KeyType: HASH
+        - AttributeName: userId
+          AttributeType: S
         - AttributeName: imageUrl
           KeyType: RANGE
       GlobalSecondaryIndexes:
-        - IndexName: ImageIdIndex
+        - IndexName: UserIdIndex
           KeySchema:
             - AttributeName: userId
-              AttributeType: S
+              KeyType: HASH
           Projection:
             ProjectionType: ALL
         - IndexName: OwnerStatusIndex
           KeySchema:
-            - AttributeName: imageKey
+            - AttributeName: userId
               KeyType: HASH
             - AttributeName: status
               KeyType: RANGE
@@ -379,7 +366,115 @@ Resources:
       TimeToLiveSpecification:
         AttributeName: ttl
         Enabled: true
+      Replicas:
+        - Region: !Ref PrimaryRegion
+          PointInTimeRecoverySpecification:
+            PointInTimeRecoveryEnabled: true
+        - Region: !Ref DRRegion
+          PointInTimeRecoverySpecification:
+            PointInTimeRecoveryEnabled: true
 
+
+  # DynamoDB Global Table for backup data
+  BackupTable:
+    Type: AWS::DynamoDB::GlobalTable
+    Properties:
+      TableName: !Ref TableName
+      BillingMode: PAY_PER_REQUEST
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      Replicas:
+        - Region: !Ref PrimaryRegion
+          PointInTimeRecoverySpecification:
+            PointInTimeRecoveryEnabled: true
+        - Region: !Ref DRRegion
+          PointInTimeRecoverySpecification:
+            PointInTimeRecoveryEnabled: true
+      AttributeDefinitions:
+        - AttributeName: BackupId
+          AttributeType: S
+        - AttributeName: ChunkId
+          AttributeType: S
+        - AttributeName: BackupType
+          AttributeType: S
+        - AttributeName: Timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: BackupId
+          KeyType: HASH
+        - AttributeName: ChunkId
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: TypeTimestampIndex
+          KeySchema:
+            - AttributeName: BackupType
+              KeyType: HASH
+            - AttributeName: Timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  CognitoBackupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: CognitoBackupPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cognito-idp:ListUsers
+                  - cognito-idp:DescribeUserPool
+                Resource: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}"
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !GetAtt BackupTable.Arn
+                  - !Sub "${BackupTable.Arn}/index/*"
+
+  CognitoBackupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: cognito-service/
+      Handler: com.amalitechphotoappcognitoauth.handlers.BackupHandler::handleRequest
+      Timeout: 300
+      Role: !GetAtt CognitoBackupRole.Arn
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPoolId
+          BACKUP_TABLE: !Ref TableName
+      Events:
+        ScheduledBackup:
+          Type: Schedule
+          Properties:
+            Schedule: !Ref BackupSchedule
+            Name: CognitoBackupSchedule
+            Description: Scheduled execution of Cognito backup
+            Enabled: true
+
+  # CloudWatch Logs for monitoring
+  BackupLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${CognitoBackupFunction}"
+      RetentionInDays: 14
 
 
 
@@ -389,7 +484,7 @@ Resources:
     Properties:
       QueueName: !Ref RetryQueueName
       VisibilityTimeout: 300
-      MessageRetentionPeriod: 345600  # 4 days
+      MessageRetentionPeriod: 345600
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
         maxReceiveCount: 5
@@ -429,7 +524,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub "${RetryQueueName}-dlq"
-      MessageRetentionPeriod: 1209600  # 14 days
+      MessageRetentionPeriod: 1209600
 
   WelcomeEmailDLQ:
     Type: AWS::SQS::Queue
@@ -456,19 +551,6 @@ Resources:
               - sns:Publish
             Resource: !GetAtt PostConfirmationSNSTopic.TopicArn
 
-  # WelcomeEmailLambdaSubscription:
-  #   Type: AWS::SNS::Subscription
-  #   Properties:
-  #     Protocol: lambda
-  #     TopicArn: !Ref PostConfirmationSNSTopic
-  #     Endpoint: !GetAtt WelcomeEmailLambda.Arn
-
-  # VerifyEmailLambdaSubscription:
-  #   Type: AWS::SNS::Subscription
-  #   Properties:
-  #     Protocol: lambda
-  #     TopicArn: !Ref PostConfirmationSNSTopic
-  #     Endpoint: !GetAtt VerifyEmailLambda.Arn
 
   HealthAlertTopic:
     Type: AWS::SNS::Topic
@@ -763,7 +845,7 @@ Resources:
            Type: Api
            Properties:
              RestApiId: !Ref ApiGateway
-             Path: /images/{photoId}/delete
+             Path: /images/{imageKey}/delete
              Method: post
 
   RecoverImageFunction:
@@ -791,7 +873,7 @@ Resources:
            Type: Api
            Properties:
              RestApiId: !Ref ApiGateway
-             Path: /images/{photoId}/restore
+             Path: /images/{imageKey}/restore
              Method: post
 
   PermanentlyDeleteImageFunction:
@@ -816,34 +898,10 @@ Resources:
            Type: Api
            Properties:
              RestApiId: !Ref ApiGateway
-             Path: /images/{photoId}/permanent-delete
+             Path: /images/{imageKey}/permanent-delete
              Method: delete
 
   # ===== Lambda Functions: Authentication =====
-  PostConfirmationLambda:
-    Type: AWS::Serverless::Function
-    #    DependsOn: PostConfirmationSNSTopic
-    Properties:
-      FunctionName: !Sub "photo-blog-post-confirmation-${Environment}"
-      Handler: com.amalitechphotoappcognitoauth.handlers.PostConfirmationHandler::handleRequest
-      CodeUri: cognito-service/
-      Environment:
-        Variables:
-          SNS_TOPIC_ARN: !Ref PostConfirmationSNSTopic
-          ENVIRONMENT: !Ref Environment
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - sns:Publish
-              Resource: !GetAtt PostConfirmationSNSTopic.TopicArn
-            - Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-              Resource: '*'
 
   WelcomeEmailLambda:
     Type: AWS::Serverless::Function
@@ -866,7 +924,7 @@ Resources:
               Action:
                 - ses:SendEmail
                 - ses:SendRawEmail
-              Resource: '*'
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${EmailDomain}"
             - Effect: Allow
               Action:
                 - logs:CreateLogGroup
@@ -895,7 +953,7 @@ Resources:
               Action:
                 - ses:SendEmail
                 - ses:SendRawEmail
-              Resource: '*'
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${EmailDomain}"
             - Effect: Allow
               Action:
                 - logs:CreateLogGroup
@@ -916,18 +974,20 @@ Resources:
               Action:
                 - dynamodb:ListTables
                 - dynamodb:DescribeTable
-              Resource: '*'
+              Resource: !GetAtt PhotoTable.Arn
             - Effect: Allow
               Action:
                 - s3:ListBuckets
                 - s3:ListAllMyBuckets
                 - s3:GetBucketLocation
                 - s3:HeadBucket
-              Resource: '*'
+              Resource:
+                - !Sub "arn:aws:s3:::${StagingBucket}"
+                - !Sub "arn:aws:s3:::${ProcessedBucket}"
             - Effect: Allow
               Action:
                 - cognito-idp:ListUserPools
-              Resource: '*'
+              Resource: !GetAtt CognitoUserPool.Arn
             - Effect: Allow
               Action:
                 - logs:CreateLogGroup
@@ -1072,7 +1132,7 @@ Resources:
                 Action:
                   - ses:SendEmail
                   - ses:SendRawEmail
-                Resource: "*"
+                Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${EmailDomain}"
 
   # Lambda Permissions for Cognito Triggers
   LambdaInvokePermissionWelcome:

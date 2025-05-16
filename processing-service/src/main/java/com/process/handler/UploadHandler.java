@@ -8,7 +8,7 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.process.util.SqsService;
+import com.process.service.SqsService;
 import software.amazon.awssdk.regions.Region;
 
 import java.io.ByteArrayInputStream;

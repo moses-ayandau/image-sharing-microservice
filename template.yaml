@@ -340,25 +340,25 @@ Resources:
           AttributeType: S
         - AttributeName: imageUrl
           AttributeType: S
-        - AttributeName: photoId
-          AttributeType: S
         - AttributeName: status
           AttributeType: S
       KeySchema:
         - AttributeName: userId
+          AttributeType: S
+        - AttributeName: imageKey
           KeyType: HASH
         - AttributeName: imageUrl
           KeyType: RANGE
       GlobalSecondaryIndexes:
         - IndexName: ImageIdIndex
           KeySchema:
-            - AttributeName: photoId
-              KeyType: HASH
+            - AttributeName: userId
+              AttributeType: S
           Projection:
             ProjectionType: ALL
         - IndexName: OwnerStatusIndex
           KeySchema:
-            - AttributeName: userId
+            - AttributeName: imageKey
               KeyType: HASH
             - AttributeName: status
               KeyType: RANGE

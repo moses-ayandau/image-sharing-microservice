@@ -1,7 +1,7 @@
 package com.service;
 
-import upload.repository.S3Repository;
-import upload.repository.SqsRepository;
+import com.repository.S3Repository;
+import com.repository.SqsRepository;
 
 import java.io.ByteArrayInputStream;
 import java.net.URLConnection;

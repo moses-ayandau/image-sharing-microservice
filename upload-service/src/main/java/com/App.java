@@ -58,7 +58,7 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
                 // Fall back to header
                 token = input.getHeaders().get("Authorization");
                 if (token != null && token.startsWith("Bearer ")) {
-                    token = token.substring(7); // Remove "Bearer " prefix
+                    token = token.substring(7);
                 } else {
                     logger.log("ERROR: No valid token found in request");
                     throw new IllegalArgumentException("Authentication token is required");

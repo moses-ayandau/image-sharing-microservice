@@ -74,11 +74,7 @@ public class SigninAlertHandler implements RequestHandler<Object, Object> {
             }
         } catch (Exception e) {
             logger.error("Error processing sign-in alert", e);
-        } finally {
-            // Close the SES client
-            emailService.close();
         }
-
         // Return the input event as required by Cognito triggers
         return input;
     }

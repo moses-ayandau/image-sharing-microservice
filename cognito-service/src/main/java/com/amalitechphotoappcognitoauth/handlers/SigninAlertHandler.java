@@ -25,6 +25,11 @@ public class SigninAlertHandler implements RequestHandler<Object, Object> {
     private static final ObjectMapper objectMapper = new ObjectMapper();
     private final EmailService emailService;
 
+    // Listowel Added a no args constructor because it was throwing a no zero args constructor error
+    public SigninAlertHandler() {
+        this.emailService = new EmailService();
+    }
+
     public SigninAlertHandler(EmailService emailService) {
         this.emailService = emailService;
     }

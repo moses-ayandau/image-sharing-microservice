@@ -23,6 +23,9 @@ public class WelcomeEmailHandler implements RequestHandler<Object, Object> {
     public WelcomeEmailHandler(EmailService emailService) {
         this.emailService = emailService;
     }
+    public WelcomeEmailHandler() {
+        this.emailService = new EmailService();
+    }
 
     @Override
     public Object handleRequest(Object input, Context context) {

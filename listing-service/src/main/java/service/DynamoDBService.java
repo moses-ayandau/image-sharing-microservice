@@ -11,7 +11,22 @@ public class DynamoDBService {
     private static final DynamoDbClient dynamoDbClient = DynamodbFactory.createClient();
     private static final String tableName = System.getenv("IMAGE_TABLE");
 
-    public static List<Map<String, AttributeValue>> getActiveImages(String userId) {
+//    public static List<Map<String, AttributeValue>> getActiveImages(String userId) {
+//        QueryRequest queryRequest = QueryRequest.builder()
+//                .tableName(tableName)
+//                .indexName("OwnerStatusIndex")
+//                .keyConditionExpression("userId = :userId AND #s = :statusValue")
+//                .expressionAttributeNames(Map.of("#s", "status"))
+//                .expressionAttributeValues(Map.of(
+//                        ":userId", AttributeValue.builder().s(userId).build(),
+//                        ":statusValue", AttributeValue.builder().s("active").build()))
+//                .build();
+//
+//        QueryResponse response = dynamoDbClient.query(queryRequest);
+//        return response.items();
+//    }
+
+    public static List<Map<String, AttributeValue>> getUserImages(String userId, String status) {
         QueryRequest queryRequest = QueryRequest.builder()
                 .tableName(tableName)
                 .indexName("OwnerStatusIndex")
@@ -19,27 +34,27 @@ public class DynamoDBService {
                 .expressionAttributeNames(Map.of("#s", "status"))
                 .expressionAttributeValues(Map.of(
                         ":userId", AttributeValue.builder().s(userId).build(),
-                        ":statusValue", AttributeValue.builder().s("active").build()))
+                        ":statusValue", AttributeValue.builder().s(status).build()))
                 .build();
 
         QueryResponse response = dynamoDbClient.query(queryRequest);
         return response.items();
     }
 
-    public static List<Map<String, AttributeValue>> getDeletedImages(String userId) {
-        QueryRequest queryRequest = QueryRequest.builder()
-                .tableName(tableName)
-                .indexName("OwnerStatusIndex")
-                .keyConditionExpression("userId = :userId AND #s = :statusValue")
-                .expressionAttributeNames(Map.of("#s", "status"))
-                .expressionAttributeValues(Map.of(
-                        ":userId", AttributeValue.builder().s(userId).build(),
-                        ":statusValue", AttributeValue.builder().s("inactive").build()))
-                .build();
-
-        QueryResponse response = dynamoDbClient.query(queryRequest);
-        return response.items();
-    }
+//    public static List<Map<String, AttributeValue>> getDeletedImages(String userId) {
+//        QueryRequest queryRequest = QueryRequest.builder()
+//                .tableName(tableName)
+//                .indexName("OwnerStatusIndex")
+//                .keyConditionExpression("userId = :userId AND #s = :statusValue")
+//                .expressionAttributeNames(Map.of("#s", "status"))
+//                .expressionAttributeValues(Map.of(
+//                        ":userId", AttributeValue.builder().s(userId).build(),
+//                        ":statusValue", AttributeValue.builder().s("inactive").build()))
+//                .build();
+//
+//        QueryResponse response = dynamoDbClient.query(queryRequest);
+//        return response.items();
+//    }
 
     public static boolean isImageActive(String imageKey) {
         String imageUrl = "https://image-processed-bucket-prod-861276111046.s3.us-east-1.amazonaws.com/" + imageKey;

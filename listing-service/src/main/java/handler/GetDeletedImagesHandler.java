@@ -26,7 +26,7 @@ public class GetDeletedImagesHandler implements RequestHandler<APIGatewayProxyRe
                 return ResponseUtils.errorResponse("User ID is required", 400, input);
             }
 
-            List<Map<String, AttributeValue>> items = DynamoDBService.getDeletedImages(userId);
+            List<Map<String, AttributeValue>> items = DynamoDBService.getUserImages(userId, "inactive");
             
             List<Map<String, Object>> inactiveImages = S3Service.attachPresignedUrls(items);
             

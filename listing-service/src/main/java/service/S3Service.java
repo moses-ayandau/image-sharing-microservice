@@ -21,8 +21,11 @@ public class S3Service {
                     Map<String, Object> map = DynamoDbUtils.convertDynamoItemToMap(item);
 
                     String s3Key = (String) map.get("imageKey");
+                    if (map.get("status") == "inactive") {
+                        s3Key = (String) map.get("s3Key");
+                    }
                     if (s3Key != null) {
-                        String url = generatePresignedUrl(s3Key);
+                        String url = generatePresignedUrl(s3Key, 15);
                         map.put("url", url);
                     }
 
@@ -31,14 +34,14 @@ public class S3Service {
                 .collect(Collectors.toList());
     }
 
-    public static String generatePresignedUrl(String imageKey) {
+    public static String generatePresignedUrl(String imageKey, int durationInMinutes) {
         GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                 .bucket(BUCKET_NAME)
                 .key(imageKey)
                 .build();
 
         GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
-                .signatureDuration(Duration.ofMinutes(15))
+                .signatureDuration(Duration.ofMinutes(durationInMinutes))
                 .getObjectRequest(getObjectRequest)
                 .build();
 

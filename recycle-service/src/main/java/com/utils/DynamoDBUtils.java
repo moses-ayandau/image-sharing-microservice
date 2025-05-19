@@ -1,6 +1,8 @@
 package com.utils;
 
 import com.factories.AwsFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.*;
 
@@ -16,7 +18,7 @@ public class DynamoDBUtils {
         this.dynamoDbClient = AwsFactory.dynamoDbClient();
     }
 
-
+private final Logger logger  = LoggerFactory.getLogger(DynamoDBUtils.class);
 
     public Map<String, AttributeValue> getItemFromDynamo(String tableName, String imageKey) {
         GetItemRequest request = GetItemRequest.builder()
@@ -25,9 +27,12 @@ public class DynamoDBUtils {
                 .build();
 
         GetItemResponse response = dynamoDbClient.getItem(request);
+        logger.info("request:  " + request);
+
         if (response.item().isEmpty()) {
             throw new RuntimeException("Image not found in database");
         }
+        logger.info("Response: "+ response);
         return response.item();
     }
 

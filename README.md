@@ -130,7 +130,7 @@ The application is defined using AWS SAM (Serverless Application Model) and Clou
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-org/photo-app.git
+   git clone https://github.com/moses-ayandau/image-sharing-microservice.git
    cd photo-app
    ```
 
@@ -218,16 +218,3 @@ The application uses environment variables for configuration. These are defined 
 - **SNS Notifications** - Email alerts for system administrators
 - **DLQ Monitoring** - Dead Letter Queue monitoring and auto-redrive
 - **Error Rate Monitoring** - Detection of API error rates
-
-## 🤝 Contributing
-
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 📧 Contact
-
-For questions or support, please contact the project maintainers at:
-- nicholas.oppong@amalitech.com

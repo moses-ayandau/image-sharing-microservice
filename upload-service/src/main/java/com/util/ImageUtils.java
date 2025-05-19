@@ -37,10 +37,10 @@ public class ImageUtils {
             return "unnamed";
         }
         
-        // Replace invalid characters with underscores
+        
         String sanitized = fileName.replaceAll("[^a-zA-Z0-9.-]", "_");
         
-        // Limit length to 255 characters (common filesystem limit)
+        
         if (sanitized.length() > 255) {
             sanitized = sanitized.substring(0, 255);
         }

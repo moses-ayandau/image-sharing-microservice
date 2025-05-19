@@ -23,18 +23,18 @@ public class GetDeletedImagesHandler implements RequestHandler<APIGatewayProxyRe
         try {
             String userId = input.getPathParameters().get("userId");
             if (userId == null) {
-                return ResponseUtils.errorResponse("User ID is required", 400);
+                return ResponseUtils.errorResponse("User ID is required", 400, input);
             }
 
             List<Map<String, AttributeValue>> items = DynamoDBService.getDeletedImages(userId);
             
             List<Map<String, Object>> inactiveImages = S3Service.attachPresignedUrls(items);
             
-            return ResponseUtils.successResponse(inactiveImages, 200);
+            return ResponseUtils.successResponse(inactiveImages, 200, input);
                     
         } catch (Exception e) {
             context.getLogger().log("Error fetching inactive images: " + e.getMessage());
-            return ResponseUtils.errorResponse("Failed to fetch inactive images", 500);
+            return ResponseUtils.errorResponse("Failed to fetch inactive images", 500, input);
         }
     }
 }

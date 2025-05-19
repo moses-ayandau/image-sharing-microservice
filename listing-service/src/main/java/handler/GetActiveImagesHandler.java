@@ -23,18 +23,18 @@ public class GetActiveImagesHandler implements RequestHandler<APIGatewayProxyReq
         try {
             String userId = input.getPathParameters().get("userId");
             if (userId == null) {
-                return ResponseUtils.errorResponse("User ID is required", 400);
+                return ResponseUtils.errorResponse("User ID is required", 400, input);
             }
 
             List<Map<String, AttributeValue>> items = DynamoDBService.getActiveImages(userId);
             
             List<Map<String, Object>> activeImages = S3Service.attachPresignedUrls(items);
             
-            return ResponseUtils.successResponse(activeImages, 200);
+            return ResponseUtils.successResponse(activeImages, 200, input);
                     
         } catch (Exception e) {
             context.getLogger().log("Error fetching active images: " + e.getMessage());
-            return ResponseUtils.errorResponse("Failed to fetch active images", 500);
+            return ResponseUtils.errorResponse("Failed to fetch active images", 500, input);
         }
     }
 }

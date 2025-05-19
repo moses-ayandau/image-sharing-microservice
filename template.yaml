@@ -145,7 +145,7 @@ Resources:
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
         AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
-        AllowOrigin: "'http://localhost:8080,https://mscv2group2.link,https://dev.d3nsvx32qio5q5.amplifyapp.com'"
+        AllowOrigin: "'*'"
         MaxAge: "'3600'"
       Auth:
         DefaultAuthorizer: CognitoAuthorizer
@@ -224,6 +224,7 @@ Resources:
               - "http://localhost:8080"
               - "https://mscv2group2.link"
               - "https://dev.d3nsvx32qio5q5.amplifyapp.com"
+              - "https://dev.d6jwdgmqo81uw.amplifyapp.com"
             MaxAge: 3600
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -656,7 +657,7 @@ Resources:
       Environment:
         Variables:
           STAGING_BUCKET: !Ref StagingBucket
-          QUEUE_URL: !Ref RetryQueueName
+          QUEUE_URL: !GetAtt RetryQueue.QueueUrl
           ENVIRONMENT: !Ref Environment
       Role: !GetAtt UploadFunctionRole.Arn
       Events:
@@ -911,7 +912,7 @@ Resources:
               Action:
                 - ses:SendEmail
                 - ses:SendRawEmail
-              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${EmailDomain}"
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
             - Effect: Allow
               Action:
                 - logs:CreateLogGroup
@@ -940,7 +941,7 @@ Resources:
               Action:
                 - ses:SendEmail
                 - ses:SendRawEmail
-              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${EmailDomain}"
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
             - Effect: Allow
               Action:
                 - logs:CreateLogGroup
@@ -1119,7 +1120,7 @@ Resources:
                 Action:
                   - ses:SendEmail
                   - ses:SendRawEmail
-                Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${EmailDomain}"
+                Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
 
   # Lambda Permissions for Cognito Triggers
   LambdaInvokePermissionWelcome:

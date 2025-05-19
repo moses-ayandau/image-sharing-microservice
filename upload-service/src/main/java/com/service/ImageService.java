@@ -3,6 +3,7 @@ package com.service;
 import com.repository.S3Repository;
 import com.repository.SqsRepository;
 
+import com.amazonaws.services.lambda.runtime.Context;
 import java.io.ByteArrayInputStream;
 import java.net.URLConnection;
 import java.util.Base64;
@@ -48,7 +49,7 @@ public class ImageService {
      * @return A map containing the URL of the uploaded image and a success message
      * @throws Exception If the image processing or upload fails
      */
-    public Map<String, Object> processImageUpload(String name, String email, String imageBase64, String contentType, String imageTitle) throws Exception {
+    public Map<String, Object> processImageUpload(String name, String email, String imageBase64, String contentType, String imageTitle, String userId, Context context) throws Exception {
         if (name == null || name.isEmpty()) {
             name = "unknown-user";
         }
@@ -58,7 +59,7 @@ public class ImageService {
         }
         
         String firstName = name;
-        String lastName = "";
+        String lastName = "_unknown";
         
         if (name.contains(" ")) {
             String[] nameParts = name.split(" ", 2);
@@ -112,10 +113,11 @@ public class ImageService {
 
         Map<String, String> messageAttributes = new HashMap<>();
         messageAttributes.put("name", name);
+        messageAttributes.put("userId", userId);
         messageAttributes.put("firstName", firstName);
         messageAttributes.put("lastName", lastName);
         messageAttributes.put("email", email);
-        messageAttributes.put("objectKey", fileName);
+        messageAttributes.put("key", fileName);
         messageAttributes.put("uploadDate", new java.util.Date().toString());
         messageAttributes.put("imageTitle", imageTitle != null ? imageTitle : "");
 
@@ -124,7 +126,8 @@ public class ImageService {
         sqsStatus.put("attributes", messageAttributes);
 
         try {
-            sqsRepository.sendMessage(messageAttributes);
+            sqsRepository.sendMessage(messageAttributes, context);
+            context.getLogger().log("SQS message attributes in SQS send message in processimageupload: " + messageAttributes);
             sqsStatus.put("success", true);
             sqsStatus.put("message", "Message successfully sent to SQS queue");
         } catch (Exception e) {
@@ -149,6 +152,6 @@ public class ImageService {
      * @throws Exception If the image processing or upload fails
      */
     public Map<String, Object> processImageUpload(String name, String email, String imageBase64, String contentType) throws Exception {
-        return processImageUpload(name, email, imageBase64, contentType, null);
+        return processImageUpload(name, email, imageBase64, contentType, null, null, null);
     }
 }

@@ -67,7 +67,8 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
             
             String name = extractNameFromToken(token, logger);
             String email = extractEmailFromToken(token, logger);
-            
+            String userId = extractSubFromToken(token, logger);
+
             String imageBase64 = requestJson.has("image") ? requestJson.get("image").asText() : null;
             String contentType = requestJson.has("contentType") ? requestJson.get("contentType").asText() : null;
             
@@ -82,7 +83,8 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
                 throw new IllegalArgumentException("Image data is required");
             }
             
-            Map<String, Object> response = imageService.processImageUpload(name, email, imageBase64, contentType, imageTitle);
+            Map<String, Object> response = imageService.processImageUpload(name, email, imageBase64, contentType, imageTitle, userId, context);
+            logger.log("Image upload response from upload lambda: " + response);
             
             // Ensure name and email are in the response
             if (!response.containsKey("name")) {
@@ -192,6 +194,47 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
         } catch (Exception e) {
             logger.log("Failed to extract email from token: " + e.getMessage());
             return "unknown-email";
+        }
+    }
+
+
+    /**
+     * Extracts the subject (sub) from a JWT token.
+     * The 'sub' claim is a unique identifier for the user.
+     *
+     * @param token The JWT token string
+     * @param logger The Lambda logger
+     * @return The extracted subject identifier
+     */
+    private String extractSubFromToken(String token, com.amazonaws.services.lambda.runtime.LambdaLogger logger) {
+        try {
+            String[] parts = token.split("\\.");
+            if (parts.length != 3) {
+                logger.log("Invalid JWT token format");
+                return "unknown-sub";
+            }
+
+            try {
+                String payload = new String(Base64.getUrlDecoder().decode(parts[1]));
+                JsonNode payloadJson = objectMapper.readTree(payload);
+
+                if (payloadJson.has("sub")) {
+                    return payloadJson.get("sub").asText();
+                } else if (payloadJson.has("cognito:sub")) {
+                    return payloadJson.get("cognito:sub").asText();
+                } else if (payloadJson.has("user_id")) {
+                    return payloadJson.get("user_id").asText();
+                }
+
+                logger.log("No subject identifier found in token");
+                return "unknown-sub";
+            } catch (Exception e) {
+                logger.log("Error decoding token payload: " + e.getMessage());
+                return "unknown-sub";
+            }
+        } catch (Exception e) {
+            logger.log("Failed to extract subject from token: " + e.getMessage());
+            return "unknown-sub";
         }
     }
 

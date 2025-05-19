@@ -52,13 +52,16 @@ public class DeleteImageHandler implements RequestHandler<APIGatewayProxyRequest
                 return ResponseUtils.errorResponse(400, "Missing or empty userId");
             }
 
+            context.getLogger().log("Image Key: " + imageKey);
+            context.getLogger().log("Image table: "+ tableName);
+
             Map<String, AttributeValue> item;
 
-            context.getLogger().log("Image Key:  "+  imageKey);
-            context.getLogger().log("table name:  "+ tableName);
             try {
                 item = dynamoUtils.getItemFromDynamo(tableName, imageKey);
+                context.getLogger().log("Item:  " + item);
             } catch (RuntimeException e) {
+                context.getLogger().log("Error:   " + e.getMessage());
                 return ResponseUtils.errorResponse(404, "Image not found in database");
             }
 
@@ -81,4 +84,5 @@ public class DeleteImageHandler implements RequestHandler<APIGatewayProxyRequest
             return ResponseUtils.errorResponse(500, "Internal server error");
         }
     }
+
 }

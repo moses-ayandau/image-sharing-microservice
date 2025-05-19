@@ -18,21 +18,22 @@ public class DynamoDBUtils {
         this.dynamoDbClient = AwsFactory.dynamoDbClient();
     }
 
-private final Logger logger  = LoggerFactory.getLogger(DynamoDBUtils.class);
+    private final Logger logger  = LoggerFactory.getLogger(DynamoDBUtils.class);
 
     public Map<String, AttributeValue> getItemFromDynamo(String tableName, String imageKey) {
+        logger.info("Get item from dynamoDb  ");
         GetItemRequest request = GetItemRequest.builder()
                 .tableName(tableName)
                 .key(Map.of(IMAGE_ID, AttributeValue.fromS(imageKey)))
                 .build();
 
         GetItemResponse response = dynamoDbClient.getItem(request);
-        logger.info("request:  "+ request);
+        logger.info("request:  " + request);
 
         if (response.item().isEmpty()) {
             throw new RuntimeException("Image not found in database");
         }
-        logger.info("Response: " + response);
+        logger.info("Response: "+ response);
         return response.item();
     }
 

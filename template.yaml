@@ -826,7 +826,7 @@ Resources:
        Environment:
          Variables:
            PRIMARY_BUCKET: !Ref ProcessedBucket
-           IMAGE_TABLE: !Ref PhotoTable
+           IMAGE_TABLE: !Ref ImageTableName
            ENVIRONMENT: !Ref Environment
        Policies:
          - DynamoDBCrudPolicy:
@@ -852,7 +852,7 @@ Resources:
        Environment:
          Variables:
            PRIMARY_BUCKET: !Ref ProcessedBucket
-           IMAGE_TABLE: !Ref PhotoTable
+           IMAGE_TABLE: !Ref ImageTableName
            ENVIRONMENT: !Ref Environment
        Policies:
          - DynamoDBCrudPolicy:
@@ -876,7 +876,7 @@ Resources:
        Description: Permanently deletes images from the recycle bin
        Environment:
          Variables:
-           IMAGE_TABLE: !Ref PhotoTable
+           IMAGE_TABLE: !Ref ImageTableName
            RECYCLE_BUCKET: !Ref ProcessedBucket
            ENVIRONMENT: !Ref Environment
        Policies:

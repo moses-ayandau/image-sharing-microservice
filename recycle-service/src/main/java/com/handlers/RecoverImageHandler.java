@@ -19,8 +19,6 @@ public class RecoverImageHandler implements RequestHandler<APIGatewayProxyReques
     private String tableName = System.getenv("IMAGE_TABLE");
     private String bucketName = System.getenv("PRIMARY_BUCKET");
 
-    private static final Log log = LogFactory.getLog(RecoverImageHandler.class);
-
 
     private final ObjectMapper mapper;
     private final S3Utils s3Utils;
@@ -45,38 +43,41 @@ public class RecoverImageHandler implements RequestHandler<APIGatewayProxyReques
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent request, Context context) {
         String imageKey;
         String userId;
-        if (request == null || request.getBody() == null || request.getBody().isEmpty()) {
+
+        if (request == null) {
             return ResponseUtils.errorResponse(400, "Invalid request");
         }
-        userId = request.getHeaders().get("userId");
-        if (userId == null || userId.isEmpty()) {
-            return ResponseUtils.errorResponse(400, "Missing userId header");
+
+        // Extract imageKey from path parameters
+        Map<String, String> pathParameters = request.getPathParameters();
+        if (pathParameters == null || !pathParameters.containsKey("imageKey")) {
+            return ResponseUtils.errorResponse(400, "Missing path parameter: imageKey");
         }
+        imageKey = pathParameters.get("imageKey");
+
+        // Extract userId from query string parameters
+        Map<String, String> queryParams = request.getQueryStringParameters();
+        if (queryParams == null || !queryParams.containsKey("userId")) {
+            return ResponseUtils.errorResponse(400, "Missing query parameter: userId");
+        }
+        userId = queryParams.get("userId");
 
         try {
-            JsonNode bodyJson = mapper.readTree(request.getBody());
-            imageKey = bodyJson.get("imageKey").asText();
-            if (imageKey == null || imageKey.isEmpty()) {
-                return ResponseUtils.errorResponse(400, "Missing imageKey");
-            }
-
             String originalKey = imageKey;
             String recycleKey = "recycle/" + imageKey;
-
-            log.info("Original Key: " + originalKey);
-            log.info("recycle key: " + recycleKey);
 
             Map<String, AttributeValue> item = dynamoUtils.getItemFromDynamo(tableName, imageKey);
             s3Utils.validateOwnership(item, userId);
 
             s3Utils.copyObject(bucketName, recycleKey, originalKey);
+
             s3Utils.deleteObject(bucketName, recycleKey);
 
             dynamoUtils.updateImageStatus(tableName, imageKey, "active");
             dynamoUtils.updateS3Key(tableName, imageKey, originalKey);
+
             return ResponseUtils.successResponse(200, Map.of("message", "Image recovered: " + imageKey));
         } catch (Exception e) {
-            log.error("Failed to recover image: " + e.getMessage(), e);
             return ResponseUtils.errorResponse(500, "Recovery failed: " + e.getMessage());
         }
     }

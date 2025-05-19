@@ -12,9 +12,10 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import java.util.Map;
 
 public class PermanentlyDeleteImageHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
-    public static final String S_3_KEY = "S3Key";
+    public static final String S_3_KEY = "s3Key";
     private final String tableName = System.getenv("IMAGE_TABLE");
     private final String bucketName = System.getenv("PRIMARY_BUCKET");
+
 
     private  S3Utils s3Utils = new S3Utils();
     private  DynamoDBUtils dynamoUtils = new DynamoDBUtils();
@@ -64,7 +65,6 @@ public class PermanentlyDeleteImageHandler implements RequestHandler<APIGatewayP
             return ResponseUtils.successResponse(200, Map.of("message","Image permanently deleted"));
 
         } catch (Exception e) {
-            context.getLogger().log("Error permanently deleting image: " + e.getMessage());
             return ResponseUtils.errorResponse(500, "Internal server error");
         }
     }

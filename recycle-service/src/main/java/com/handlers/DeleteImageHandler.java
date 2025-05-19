@@ -13,7 +13,7 @@ import java.util.Map;
 
 
 public class DeleteImageHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
-    private static final String S3_KEY = "S3Key";
+    private  final String S3_KEY = "imageKey";
     private final String tableName;
     private final String bucketName;
 
@@ -52,22 +52,20 @@ public class DeleteImageHandler implements RequestHandler<APIGatewayProxyRequest
                 return ResponseUtils.errorResponse(400, "Missing or empty userId");
             }
 
-            context.getLogger().log("Image Key: " + imageKey);
-            context.getLogger().log("Image table: "+ tableName);
 
             Map<String, AttributeValue> item;
 
             try {
+
                 item = dynamoUtils.getItemFromDynamo(tableName, imageKey);
-                context.getLogger().log("Item:  " + item);
+
             } catch (RuntimeException e) {
-                context.getLogger().log("Error:   " + e.getMessage());
                 return ResponseUtils.errorResponse(404, "Image not found in database");
             }
 
             s3Utils.validateOwnership(item, userId);
 
-            if (!item.containsKey(S3_KEY) || item.get(S3_KEY) == null || item.get(S3_KEY).s() == null || item.get(S3_KEY).s().isEmpty()) {
+            if (!item.containsKey(S3_KEY) || item.get(S3_KEY) == null ) {
                 return ResponseUtils.errorResponse(404, "Corrupt image record: missing or invalid S3Key");
             }
             String oldKey = item.get(S3_KEY).s();
@@ -80,7 +78,6 @@ public class DeleteImageHandler implements RequestHandler<APIGatewayProxyRequest
 
             return ResponseUtils.successResponse(200, Map.of("message", "Image moved to recycle bin: "+ imageKey));
         } catch (Exception e) {
-            context.getLogger().log("Error deleting image: " + e.getMessage());
             return ResponseUtils.errorResponse(500, "Internal server error");
         }
     }

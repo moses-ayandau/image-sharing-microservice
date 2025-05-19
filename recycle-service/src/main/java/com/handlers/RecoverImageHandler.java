@@ -60,8 +60,8 @@ public class RecoverImageHandler implements RequestHandler<APIGatewayProxyReques
                 return ResponseUtils.errorResponse(400, "Missing imageKey");
             }
 
-            String originalKey = "main/" + userId + "/" + imageKey;
-            String recycleKey = "recycle/" + userId + "/" + imageKey;
+            String originalKey = imageKey;
+            String recycleKey = "recycle/" + imageKey;
 
             log.info("Original Key: " + originalKey);
             log.info("recycle key: " + recycleKey);

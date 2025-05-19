@@ -66,11 +66,11 @@ public class DeleteImageHandler implements RequestHandler<APIGatewayProxyRequest
                 return ResponseUtils.errorResponse(404, "Corrupt image record: missing or invalid S3Key");
             }
             String oldKey = item.get(S3_KEY).s();
-            String newKey = oldKey.replaceFirst("main/", "recycle/");
+            String newKey = "recycle/" + oldKey;
 
             s3Utils.copyObject(bucketName, oldKey, newKey);
             s3Utils.deleteObject(bucketName, oldKey);
-            dynamoUtils.updateImageStatus(tableName, imageKey, "recycle");
+            dynamoUtils.updateImageStatus(tableName, imageKey, "inactive");
             dynamoUtils.updateS3Key(tableName, imageKey, newKey);
 
             return ResponseUtils.successResponse(200, Map.of("message", "Image moved to recycle bin: "+ imageKey));

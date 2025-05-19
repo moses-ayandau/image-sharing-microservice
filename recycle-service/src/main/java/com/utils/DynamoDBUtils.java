@@ -18,9 +18,10 @@ public class DynamoDBUtils {
         this.dynamoDbClient = AwsFactory.dynamoDbClient();
     }
 
-private final Logger logger  = LoggerFactory.getLogger(DynamoDBUtils.class);
+    private final Logger logger  = LoggerFactory.getLogger(DynamoDBUtils.class);
 
     public Map<String, AttributeValue> getItemFromDynamo(String tableName, String imageKey) {
+        logger.info("Get item from dynamoDb  ");
         GetItemRequest request = GetItemRequest.builder()
                 .tableName(tableName)
                 .key(Map.of(IMAGE_ID, AttributeValue.fromS(imageKey)))

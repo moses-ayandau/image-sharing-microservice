@@ -7,6 +7,7 @@ import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 import software.amazon.awssdk.services.sqs.model.SendMessageResponse;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.amazonaws.services.lambda.runtime.Context;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -38,7 +39,7 @@ public class SqsRepository {
         this.objectMapper = new ObjectMapper();
     }
 
-    public Map<String, Object> sendMessage(Map<String, String> messageAttributes) throws Exception {
+    public Map<String, Object> sendMessage(Map<String, String> messageAttributes, Context context) throws Exception {
         Map<String, Object> result = new HashMap<>();
         messageAttributes.put("messageType", "userUpload");
 
@@ -59,7 +60,7 @@ public class SqsRepository {
                 .queueUrl(queueUrl)
                 .messageBody(messageBody)
                 .messageAttributes(sqsMessageAttributes);
-
+        context.getLogger().log("Message body: " + messageBody);
         // Only add FIFO-specific attributes if using a FIFO queue
         if (queueUrl != null && queueUrl.endsWith(".fifo")) {
             requestBuilder.messageGroupId("userUploads")
@@ -68,6 +69,7 @@ public class SqsRepository {
 
         try {
             SendMessageResponse sendResult = sqsClient.sendMessage(requestBuilder.build());
+            context.getLogger().log("Message sent with ID: " + sendResult);
 
             result.put("success", true);
             result.put("messageId", sendResult.messageId());

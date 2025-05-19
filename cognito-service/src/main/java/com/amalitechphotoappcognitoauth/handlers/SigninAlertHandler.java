@@ -25,8 +25,13 @@ public class SigninAlertHandler implements RequestHandler<Object, Object> {
     private static final ObjectMapper objectMapper = new ObjectMapper();
     private final EmailService emailService;
 
+    // Listowel Added a no args constructor because it was throwing a no zero args constructor error
     public SigninAlertHandler() {
         this.emailService = new EmailService();
+    }
+
+    public SigninAlertHandler(EmailService emailService) {
+        this.emailService = emailService;
     }
 
     @Override
@@ -34,7 +39,6 @@ public class SigninAlertHandler implements RequestHandler<Object, Object> {
         logger.info("Processing sign-in alert request");
 
         try {
-            // Convert the input to a CognitoEvent
             CognitoEvent event = objectMapper.convertValue(input, CognitoEvent.class);
             logger.info("Trigger source: {}", event.getTriggerSource());
 
@@ -50,17 +54,13 @@ public class SigninAlertHandler implements RequestHandler<Object, Object> {
 
                 logger.info("Sending sign-in alert to: {}", email);
 
-                // Extract device details from the context
                 String deviceDetails = extractDeviceDetails(event);
 
-                // Format the current timestamp
                 String timestamp = formatTimestamp(Instant.now());
 
-                // Create email content
                 String subject = "New Sign-in Detected - Photo Blog App";
                 String htmlBody = EmailTemplates.getSignInAlertTemplate(name, deviceDetails, timestamp);
 
-                // Send the sign-in alert email
                 EmailRequest emailRequest = new EmailRequest(email, subject, htmlBody);
                 boolean result = emailService.sendEmail(emailRequest);
 
@@ -75,7 +75,6 @@ public class SigninAlertHandler implements RequestHandler<Object, Object> {
         } catch (Exception e) {
             logger.error("Error processing sign-in alert", e);
         }
-        // Return the input event as required by Cognito triggers
         return input;
     }
 
@@ -97,7 +96,6 @@ public class SigninAlertHandler implements RequestHandler<Object, Object> {
      */
     private String extractDeviceDetails(CognitoEvent event) {
         try {
-            // Check if caller context and client metadata exist
             if (event.getCallerContext() != null) {
                 StringBuilder details = new StringBuilder();
 
@@ -114,7 +112,6 @@ public class SigninAlertHandler implements RequestHandler<Object, Object> {
                     }
                 }
 
-                // If no details were found, provide a generic message
                 if (details.isEmpty()) {
                     return "Unknown device";
                 }
@@ -124,7 +121,6 @@ public class SigninAlertHandler implements RequestHandler<Object, Object> {
         } catch (Exception e) {
             logger.error("Error extracting device details", e);
         }
-
         return "Unknown device";
     }
 

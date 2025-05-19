@@ -45,22 +45,22 @@ public class ShareImageHandler implements RequestHandler<APIGatewayProxyRequestE
             String imageKey = requestBody.get("imageKey").asText();
             
             if (imageKey == null || imageKey.isEmpty()) {
-                return ResponseUtils.errorResponse("Image key is required", 400);
+                return ResponseUtils.errorResponse("Image key is required", 400, input);
             }
 
             if (!isImageActive(imageKey)) {
-                return ResponseUtils.errorResponse("Cannot share inactive or deleted images", 403);
+                return ResponseUtils.errorResponse("Cannot share inactive or deleted images", 403, input);
             }
             
             String presignedUrl = generatePresignedUrl(imageKey);
             Map<String, String> responseBody = new HashMap<>();
             responseBody.put("presignedUrl", presignedUrl);
             
-            return ResponseUtils.successResponse(responseBody, 200);
+            return ResponseUtils.successResponse(responseBody, 200, input);
             
         } catch (Exception e) {
             context.getLogger().log("Error generating presigned URL: " + e.getMessage());
-            return ResponseUtils.errorResponse("Failed to generate presigned URL", 500);
+            return ResponseUtils.errorResponse("Failed to generate presigned URL", 500, input);
         }
     }
 }

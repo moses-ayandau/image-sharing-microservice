@@ -54,8 +54,8 @@ public class CognitoEvent {
         return request;
     }
 
-    public String getUserName() {
-        return userName;
+    public void setRequest(Request request) {
+        this.request = request;
     }
 
     public String getUserEmail() {
@@ -74,47 +74,6 @@ public class CognitoEvent {
             }
         }
         return "User";
-    }
-
-    // Getters and setters for other fields
-    public String getVersion() {
-        return version;
-    }
-
-    public void setVersion(String version) {
-        this.version = version;
-    }
-
-    public String getRegion() {
-        return region;
-    }
-
-    public void setRegion(String region) {
-        this.region = region;
-    }
-
-    public String getUserPoolId() {
-        return userPoolId;
-    }
-
-    public void setUserPoolId(String userPoolId) {
-        this.userPoolId = userPoolId;
-    }
-
-    public Map<String, String> getResponse() {
-        return response;
-    }
-
-    public void setResponse(Map<String, String> response) {
-        this.response = response;
-    }
-
-    public Map<String, Object> getUserAttributes() {
-        return userAttributes;
-    }
-
-    public void setUserAttributes(Map<String, Object> userAttributes) {
-        this.userAttributes = userAttributes;
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -143,38 +102,6 @@ public class CognitoEvent {
 
         public void setUserAttributes(Map<String, Object> userAttributes) {
             this.userAttributes = userAttributes;
-        }
-
-        public Boolean getNewDeviceUsed() {
-            return newDeviceUsed;
-        }
-
-        public void setNewDeviceUsed(Boolean newDeviceUsed) {
-            this.newDeviceUsed = newDeviceUsed;
-        }
-
-        public String getCode() {
-            return code;
-        }
-
-        public void setCode(String code) {
-            this.code = code;
-        }
-
-        public String getType() {
-            return type;
-        }
-
-        public void setType(String type) {
-            this.type = type;
-        }
-
-        public Map<String, String> getClientMetadata() {
-            return clientMetadata;
-        }
-
-        public void setClientMetadata(Map<String, String> clientMetadata) {
-            this.clientMetadata = clientMetadata;
         }
     }
 }

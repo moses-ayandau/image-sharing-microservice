@@ -20,6 +20,9 @@ public class WelcomeEmailHandler implements RequestHandler<Object, Object> {
     private static final ObjectMapper objectMapper = new ObjectMapper();
     private final EmailService emailService;
 
+    public WelcomeEmailHandler(EmailService emailService) {
+        this.emailService = emailService;
+    }
     public WelcomeEmailHandler() {
         this.emailService = new EmailService();
     }
@@ -29,7 +32,6 @@ public class WelcomeEmailHandler implements RequestHandler<Object, Object> {
         logger.info("Processing welcome email request");
 
         try {
-            // Convert the input to a CognitoEvent
             CognitoEvent event = objectMapper.convertValue(input, CognitoEvent.class);
             logger.info("Trigger source: {}", event.getTriggerSource());
 
@@ -47,11 +49,9 @@ public class WelcomeEmailHandler implements RequestHandler<Object, Object> {
 
                 logger.info("Sending welcome email to: {}", email);
 
-                // Create email content
                 String subject = "Welcome to Photo Blog App!";
                 String htmlBody = EmailTemplates.getWelcomeEmailTemplate(name);
 
-                // Send the welcome email
                 EmailRequest emailRequest = new EmailRequest(email, subject, htmlBody);
                 boolean result = emailService.sendEmail(emailRequest);
 
@@ -65,12 +65,7 @@ public class WelcomeEmailHandler implements RequestHandler<Object, Object> {
             }
         } catch (Exception e) {
             logger.error("Error processing welcome email", e);
-        } finally {
-            // Close the SES client
-            emailService.close();
         }
-
-        // Return the input event as required by Cognito triggers
         return input;
     }
 }

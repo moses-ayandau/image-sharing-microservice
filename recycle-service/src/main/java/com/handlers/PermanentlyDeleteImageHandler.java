@@ -35,19 +35,19 @@ public class PermanentlyDeleteImageHandler implements RequestHandler<APIGatewayP
                 return ResponseUtils.errorResponse(400, "Missing required path or query parameters");
             }
 
-            String imageId = input.getPathParameters().get("imageId");
+            String imageKey = input.getPathParameters().get("imageKey");
             String userId = input.getQueryStringParameters().get("userId");
 
             // Validate actual parameter values
-            if (imageId == null || imageId.trim().isEmpty()) {
-                return ResponseUtils.errorResponse(400, "Missing or empty 'imageId'");
+            if (imageKey == null || imageKey.trim().isEmpty()) {
+                return ResponseUtils.errorResponse(400, "Missing or empty 'imageKey'");
             }
 
             if (userId == null || userId.trim().isEmpty()) {
                 return ResponseUtils.errorResponse(400, "Missing or empty 'userId'");
             }
 
-            Map<String, AttributeValue> item = dynamoUtils.getItemFromDynamo(tableName, imageId);
+            Map<String, AttributeValue> item = dynamoUtils.getItemFromDynamo(tableName, imageKey);
             if (!item.containsKey(S_3_KEY) || item.get(S_3_KEY) == null || item.get(S_3_KEY).s() == null || item.get(S_3_KEY).s().isEmpty()) {
                 return ResponseUtils.errorResponse(400, "Missing or invalid S3Key");
             }
@@ -59,7 +59,7 @@ public class PermanentlyDeleteImageHandler implements RequestHandler<APIGatewayP
             }
 
             s3Utils.deleteObject(bucketName, key);
-            dynamoUtils.deleteRecordFromDynamo(tableName, imageId);
+            dynamoUtils.deleteRecordFromDynamo(tableName, imageKey);
 
             return ResponseUtils.successResponse(200, Map.of("message","Image permanently deleted"));
 

@@ -117,43 +117,4 @@ public class EmailTemplates {
         return EMAIL_HEADER + content + EMAIL_FOOTER;
     }
 
-    /**
-     * Creates a forgot password email template
-     *
-     * @param userName  User's display name
-     * @param resetCode Password reset code
-     * @return HTML email body
-     */
-    public static String getForgotPasswordTemplate(String userName, String resetCode) {
-        String content = String.format("""
-                <h2>Password Reset Request</h2>
-                <p>Hello %s,</p>
-                <p>We received a request to reset your password for Photo Blog App.</p>
-                <p>Your password reset code is: <strong>%s</strong></p>
-                <p>If you didn't request a password reset, please ignore this email or contact our support team.</p>
-                <p><a href="%s/auth/reset-password" class="button">Reset Password</a></p>
-                <p>This code will expire in 30 minutes for security reasons.</p>
-                """, userName, resetCode, APP_URL);
-
-        return EMAIL_HEADER + content + EMAIL_FOOTER;
-    }
-
-    /**
-     * Creates a password changed confirmation email template
-     *
-     * @param userName User's display name
-     * @return HTML email body
-     */
-    public static String getPasswordChangedTemplate(String userName) {
-        String content = String.format("""
-                <h2>Password Changed Successfully</h2>
-                <p>Hello %s,</p>
-                <p>Your password for Photo Blog App has been successfully changed.</p>
-                <p>If you did not make this change, please contact our support team immediately.</p>
-                <p><a href="%s/contact-support" class="button">Contact Support</a></p>
-                <p>We take your account security seriously.</p>
-                """, userName, APP_URL);
-
-        return EMAIL_HEADER + content + EMAIL_FOOTER;
-    }
 }

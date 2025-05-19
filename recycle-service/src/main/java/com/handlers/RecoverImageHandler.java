@@ -43,7 +43,7 @@ public class RecoverImageHandler implements RequestHandler<APIGatewayProxyReques
 
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent request, Context context) {
-        String imageId;
+        String imageKey;
         String userId;
         if (request == null || request.getBody() == null || request.getBody().isEmpty()) {
             return ResponseUtils.errorResponse(400, "Invalid request");
@@ -55,26 +55,26 @@ public class RecoverImageHandler implements RequestHandler<APIGatewayProxyReques
 
         try {
             JsonNode bodyJson = mapper.readTree(request.getBody());
-            imageId = bodyJson.get("imageId").asText();
-            if (imageId == null || imageId.isEmpty()) {
-                return ResponseUtils.errorResponse(400, "Missing imageId");
+            imageKey = bodyJson.get("imageKey").asText();
+            if (imageKey == null || imageKey.isEmpty()) {
+                return ResponseUtils.errorResponse(400, "Missing imageKey");
             }
 
-            String originalKey = "main/" + userId + "/" + imageId;
-            String recycleKey = "recycle/" + userId + "/" + imageId;
+            String originalKey = "main/" + userId + "/" + imageKey;
+            String recycleKey = "recycle/" + userId + "/" + imageKey;
 
             log.info("Original Key: " + originalKey);
             log.info("recycle key: " + recycleKey);
 
-            Map<String, AttributeValue> item = dynamoUtils.getItemFromDynamo(tableName, imageId);
+            Map<String, AttributeValue> item = dynamoUtils.getItemFromDynamo(tableName, imageKey);
             s3Utils.validateOwnership(item, userId);
 
             s3Utils.copyObject(bucketName, recycleKey, originalKey);
             s3Utils.deleteObject(bucketName, recycleKey);
 
-            dynamoUtils.updateImageStatus(tableName, imageId, "active");
-            dynamoUtils.updateS3Key(tableName, imageId, originalKey);
-            return ResponseUtils.successResponse(200, Map.of("message", "Image recovered: " + imageId));
+            dynamoUtils.updateImageStatus(tableName, imageKey, "active");
+            dynamoUtils.updateS3Key(tableName, imageKey, originalKey);
+            return ResponseUtils.successResponse(200, Map.of("message", "Image recovered: " + imageKey));
         } catch (Exception e) {
             log.error("Failed to recover image: " + e.getMessage(), e);
             return ResponseUtils.errorResponse(500, "Recovery failed: " + e.getMessage());

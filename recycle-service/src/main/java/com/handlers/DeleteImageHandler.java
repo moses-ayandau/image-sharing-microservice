@@ -41,11 +41,11 @@ public class DeleteImageHandler implements RequestHandler<APIGatewayProxyRequest
             if (request.getPathParameters() == null || request.getQueryStringParameters() == null) {
                 return ResponseUtils.errorResponse(400, "Missing path or query parameters");
             }
-            String imageId = request.getPathParameters().get("imageId");
+            String imageKey = request.getPathParameters().get("imageKey");
             String userId = request.getQueryStringParameters().get("userId");
 
-            if (imageId == null || imageId.trim().isEmpty()) {
-                return ResponseUtils.errorResponse(400, "Missing or empty imageId");
+            if (imageKey == null || imageKey.trim().isEmpty()) {
+                return ResponseUtils.errorResponse(400, "Missing or empty imageKey");
             }
 
             if (userId == null || userId.trim().isEmpty()) {
@@ -55,7 +55,7 @@ public class DeleteImageHandler implements RequestHandler<APIGatewayProxyRequest
             Map<String, AttributeValue> item;
 
             try {
-                item = dynamoUtils.getItemFromDynamo(tableName, imageId);
+                item = dynamoUtils.getItemFromDynamo(tableName, imageKey);
             } catch (RuntimeException e) {
                 return ResponseUtils.errorResponse(404, "Image not found in database");
             }
@@ -70,15 +70,13 @@ public class DeleteImageHandler implements RequestHandler<APIGatewayProxyRequest
 
             s3Utils.copyObject(bucketName, oldKey, newKey);
             s3Utils.deleteObject(bucketName, oldKey);
-            dynamoUtils.updateImageStatus(tableName, imageId, "recycle");
-            dynamoUtils.updateS3Key(tableName, imageId, newKey);
+            dynamoUtils.updateImageStatus(tableName, imageKey, "recycle");
+            dynamoUtils.updateS3Key(tableName, imageKey, newKey);
 
-            return ResponseUtils.successResponse(200, Map.of("message", "Image moved to recycle bin: "+ imageId));
+            return ResponseUtils.successResponse(200, Map.of("message", "Image moved to recycle bin: "+ imageKey));
         } catch (Exception e) {
             context.getLogger().log("Error deleting image: " + e.getMessage());
             return ResponseUtils.errorResponse(500, "Internal server error");
         }
     }
-
-
 }

@@ -145,7 +145,7 @@ Resources:
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
         AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
-        AllowOrigin: "'http://localhost:8080,https://mscv2group2.link,https://dev.d3nsvx32qio5q5.amplifyapp.com'"
+        AllowOrigin: "'*'"
         MaxAge: "'3600'"
       Auth:
         DefaultAuthorizer: CognitoAuthorizer
@@ -224,6 +224,7 @@ Resources:
               - "http://localhost:8080"
               - "https://mscv2group2.link"
               - "https://dev.d3nsvx32qio5q5.amplifyapp.com"
+              - "https://dev.d6jwdgmqo81uw.amplifyapp.com"
             MaxAge: 3600
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -244,9 +245,12 @@ Resources:
               Prefix: ""
       LifecycleConfiguration:
         Rules:
-          - Id: AutoDeleteAfter30Days
+          - Id: TransitionToGlacierDeepArchive
             Prefix: recycle/
             Status: Enabled
+            Transitions:
+              - StorageClass: DEEP_ARCHIVE
+                TransitionInDays: 1
             ExpirationInDays: 30
 
   DestinationBucket:
@@ -428,21 +432,15 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - cognito-idp:ListUsers
                   - cognito-idp:DescribeUserPool
-                Resource: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPool}"
+                  - cognito-idp:ListUsers
+                  - cognito-idp:ListUsersInGroup
+                  - cognito-idp:ListGroups
+                Resource: !Sub "arn:aws:cognito-idp:*:${AWS::AccountId}:userpool/*"
               - Effect: Allow
                 Action:
                   - dynamodb:PutItem
-                  - dynamodb:GetItem
-                  - dynamodb:Query
-                  - dynamodb:Scan
-                  - dynamodb:BatchWriteItem
-                  - dynamodb:DeleteItem
-                  - dynamodb:UpdateItem
-                Resource:
-                  - !GetAtt BackupTable.Arn
-                  - !Sub "${BackupTable.Arn}/index/*"
+                Resource: !GetAtt BackupTable.Arn
 
   CognitoBackupFunction:
     Type: AWS::Serverless::Function
@@ -659,7 +657,7 @@ Resources:
       Environment:
         Variables:
           STAGING_BUCKET: !Ref StagingBucket
-          QUEUE_URL: !Ref RetryQueueName
+          QUEUE_URL: !GetAtt RetryQueue.QueueUrl
           ENVIRONMENT: !Ref Environment
       Role: !GetAtt UploadFunctionRole.Arn
       Events:
@@ -748,7 +746,7 @@ Resources:
       Environment:
         Variables:
           PROCESSED_IMAGES_BUCKET: !Ref ProcessedBucket
-          IMAGE_TABLE: !Ref ImageTableName
+          IMAGE_TABLE: !Ref PhotoTable
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref PhotoTable
@@ -773,7 +771,7 @@ Resources:
       Environment:
         Variables:
           PROCESSED_IMAGES_BUCKET: !Ref ProcessedBucket
-          IMAGE_TABLE: !Ref ImageTableName
+          IMAGE_TABLE: !Ref PhotoTable
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref PhotoTable
@@ -798,7 +796,7 @@ Resources:
       Environment:
         Variables:
           PROCESSED_IMAGES_BUCKET: !Ref ProcessedBucket
-          IMAGE_TABLE: !Ref ImageTableName
+          IMAGE_TABLE: !Ref PhotoTable
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref ProcessedBucket
@@ -825,7 +823,7 @@ Resources:
        Environment:
          Variables:
            PRIMARY_BUCKET: !Ref ProcessedBucket
-           IMAGE_TABLE: !Ref ImageTableName
+           IMAGE_TABLE: !Ref PhotoTable
            ENVIRONMENT: !Ref Environment
        Policies:
          - DynamoDBCrudPolicy:
@@ -851,14 +849,13 @@ Resources:
        Environment:
          Variables:
            PRIMARY_BUCKET: !Ref ProcessedBucket
-           IMAGE_TABLE: !Ref ImageTableName
+           IMAGE_TABLE: !Ref PhotoTable
            ENVIRONMENT: !Ref Environment
        Policies:
          - DynamoDBCrudPolicy:
              TableName: !Ref PhotoTable
          - S3CrudPolicy:
              BucketName: !Ref ProcessedBucket
-
        Events:
          ApiEvent:
            Type: Api
@@ -876,7 +873,7 @@ Resources:
        Description: Permanently deletes images from the recycle bin
        Environment:
          Variables:
-           IMAGE_TABLE: !Ref ImageTableName
+           IMAGE_TABLE: !Ref PhotoTable
            RECYCLE_BUCKET: !Ref ProcessedBucket
            ENVIRONMENT: !Ref Environment
        Policies:
@@ -915,7 +912,7 @@ Resources:
               Action:
                 - ses:SendEmail
                 - ses:SendRawEmail
-              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${EmailDomain}"
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
             - Effect: Allow
               Action:
                 - logs:CreateLogGroup
@@ -944,7 +941,7 @@ Resources:
               Action:
                 - ses:SendEmail
                 - ses:SendRawEmail
-              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${EmailDomain}"
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
             - Effect: Allow
               Action:
                 - logs:CreateLogGroup
@@ -1123,7 +1120,7 @@ Resources:
                 Action:
                   - ses:SendEmail
                   - ses:SendRawEmail
-                Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${EmailDomain}"
+                Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
 
   # Lambda Permissions for Cognito Triggers
   LambdaInvokePermissionWelcome:

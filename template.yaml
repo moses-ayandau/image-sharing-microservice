@@ -877,7 +877,7 @@ Resources:
        Environment:
          Variables:
            IMAGE_TABLE: !Ref ImageTableName
-           RECYCLE_BUCKET: !Ref ProcessedBucket
+           PRIMARY_BUCKET: !Ref ProcessedBucket
            ENVIRONMENT: !Ref Environment
        Policies:
          - DynamoDBCrudPolicy:

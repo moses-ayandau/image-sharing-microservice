@@ -52,7 +52,7 @@ public class ShareImageHandler implements RequestHandler<APIGatewayProxyRequestE
                 return ResponseUtils.errorResponse("Cannot share inactive or deleted images", 403, input);
             }
             
-            String presignedUrl = generatePresignedUrl(imageKey);
+            String presignedUrl = generatePresignedUrl(imageKey, constants.PRESIGNED_URL_EXPIRATION);
             Map<String, String> responseBody = new HashMap<>();
             responseBody.put("presignedUrl", presignedUrl);
             

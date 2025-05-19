@@ -21,7 +21,7 @@ public class S3Service {
                     Map<String, Object> map = DynamoDbUtils.convertDynamoItemToMap(item);
 
                     String s3Key = (String) map.get("imageKey");
-                    if (map.get("status") == "inactive") {
+                    if ("inactive".equals(map.get("status"))) {
                         s3Key = (String) map.get("s3Key");
                     }
                     if (s3Key != null) {

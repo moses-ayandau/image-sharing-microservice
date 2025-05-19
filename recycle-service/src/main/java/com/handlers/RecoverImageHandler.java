@@ -78,6 +78,7 @@ public class RecoverImageHandler implements RequestHandler<APIGatewayProxyReques
 
             return ResponseUtils.successResponse(200, Map.of("message", "Image recovered: " + imageKey));
         } catch (Exception e) {
+            context.getLogger().log("Error permanently deleting image: " + e.getMessage());
             return ResponseUtils.errorResponse(500, "Recovery failed: " + e.getMessage());
         }
     }

@@ -65,6 +65,7 @@ public class PermanentlyDeleteImageHandler implements RequestHandler<APIGatewayP
             return ResponseUtils.successResponse(200, Map.of("message","Image permanently deleted"));
 
         } catch (Exception e) {
+            context.getLogger().log("Error permanently deleting image: " + e.getMessage());
             return ResponseUtils.errorResponse(500, "Internal server error");
         }
     }

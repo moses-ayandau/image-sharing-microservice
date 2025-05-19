@@ -223,6 +223,9 @@ Resources:
             AllowedOrigins:
               - "http://localhost:8080"
               - "https://mscv2group2.link"
+              - "https://www.mscv2group2.link"
+              - "http://www.mscv2group2.link"
+              - "http://mscv2group2.link"
               - "https://dev.d3nsvx32qio5q5.amplifyapp.com"
               - "https://dev.d6jwdgmqo81uw.amplifyapp.com"
             MaxAge: 3600

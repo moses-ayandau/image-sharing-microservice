@@ -54,6 +54,8 @@ public class DeleteImageHandler implements RequestHandler<APIGatewayProxyRequest
 
             Map<String, AttributeValue> item;
 
+            context.getLogger().log("Image Key:  "+  imageKey);
+            context.getLogger().log("table name:  "+ tableName);
             try {
                 item = dynamoUtils.getItemFromDynamo(tableName, imageKey);
             } catch (RuntimeException e) {

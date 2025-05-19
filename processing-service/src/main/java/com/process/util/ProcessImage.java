@@ -5,6 +5,7 @@ import com.process.service.DynamoDbService;
 import com.process.service.EmailService;
 import com.process.service.S3Service;
 import com.process.service.SqsService;
+import software.amazon.awssdk.services.ses.model.MessageRejectedException;
 
 import java.util.UUID;
 
@@ -38,7 +39,15 @@ public class ProcessImage {
             context.getLogger().log("Retrieved image data size: " + imageData.length + " bytes");
 
             context.getLogger().log("Adding watermark to image");
-            emailService.sendProcessingStartEmail(email, firstName);
+
+            // Send processing start email - wrapped in try-catch to handle unverified emails
+            try {
+                emailService.sendProcessingStartEmail(email, firstName);
+            } catch (MessageRejectedException e) {
+                context.getLogger().log("Warning: Could not send processing start email due to unverified address: " + e.getMessage());
+                // Continue processing despite email failure
+            }
+
             byte[] watermarkedImage = imageProcessor.addWatermark(imageData, firstName, lastName);
 
             if (watermarkedImage == null || watermarkedImage.length == 0) {
@@ -56,40 +65,57 @@ public class ProcessImage {
             String imageUrl = "https://" + System.getenv("PROCESSED_BUCKET") + ".s3." +
                     System.getenv("AWS_REGION") + ".amazonaws.com/" + processedKey;
 
-            dynamoDbService.storeImageMetadata(userId, processedKey, imageTitle,  imageUrl);
+            dynamoDbService.storeImageMetadata(userId, processedKey, imageTitle, imageUrl);
 
             context.getLogger().log("Deleting original image from staging bucket");
             s3Service.deleteFromStagingBucket(bucket, key);
 
-            context.getLogger().log("Sending completion email to: " + email);
+            // Send completion email - wrapped in try-catch to handle unverified emails
             if (email != null && !email.trim().isEmpty()) {
                 try {
                     emailService.sendProcessingCompleteEmail(email, firstName, processedKey);
                     context.getLogger().log("Email sent to the receiver");
+                } catch (MessageRejectedException e) {
+                    context.getLogger().log("Warning: Could not send completion email due to unverified address: " + e.getMessage());
+                    // Continue processing despite email failure
                 } catch (Exception e) {
                     context.getLogger().log("Failed to send email: " + e.getMessage());
+                    // Continue processing despite email failure
                 }
             }
 
             context.getLogger().log("Successfully processed image: " + key);
         } catch (Exception e) {
-            context.getLogger().log("Error processing image: " + e.getClass().getName() + ": " + e.getMessage());
-            if (e.getCause() != null) {
-                context.getLogger().log("Caused by: " + e.getCause().getMessage());
+            // Skip logging for MessageRejectedException and focus on the real error
+            if (!(e instanceof MessageRejectedException)) {
+                context.getLogger().log("Error processing image: " + e.getClass().getName() + ": " + e.getMessage());
+                if (e.getCause() != null) {
+                    context.getLogger().log("Caused by: " + e.getCause().getMessage());
+                }
+
+                for (StackTraceElement element : e.getStackTrace()) {
+                    context.getLogger().log("  at " + element.toString());
+                }
             }
 
-            for (StackTraceElement element : e.getStackTrace()) {
-                context.getLogger().log("  at " + element.toString());
+            // Try to send failure email but don't let it affect the flow
+            try {
+                emailService.sendProcessingFailureEmail(email, firstName);
+            } catch (MessageRejectedException mre) {
+                context.getLogger().log("Warning: Could not send failure email due to unverified address: " + mre.getMessage());
+            } catch (Exception emailEx) {
+                context.getLogger().log("Error sending failure email: " + emailEx.getMessage());
             }
 
-            // Send failure email
-            emailService.sendProcessingFailureEmail(email, firstName);
-
-            // Queue message to RetryQueue for reprocessing
-            context.getLogger().log("Queuing image for retry: " + key);
-            sqsService.queueForRetry(bucket, key, userId, email, firstName, lastName, imageTitle);
-
-            throw new RuntimeException("Failed to process image", e);
+            // Queue message to RetryQueue for reprocessing if the error wasn't just about emails
+            if (!(e instanceof MessageRejectedException)) {
+                context.getLogger().log("Queuing image for retry: " + key);
+                sqsService.queueForRetry(bucket, key, userId, email, firstName, lastName, imageTitle);
+                throw new RuntimeException("Failed to process image", e);
+            } else {
+                // If it was just a MessageRejectedException, log it but don't rethrow
+                context.getLogger().log("Email notification failed but image processing completed successfully.");
+            }
         }
     }
 }

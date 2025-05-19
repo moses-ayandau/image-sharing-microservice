@@ -23,6 +23,7 @@ public class DeleteImageHandler implements RequestHandler<APIGatewayProxyRequest
     public DeleteImageHandler() {
         this.tableName = System.getenv("IMAGE_TABLE");
         this.bucketName = System.getenv("PRIMARY_BUCKET");
+
         this.s3Utils = new S3Utils();
         this.dynamoUtils = new DynamoDBUtils();
     }
@@ -78,6 +79,7 @@ public class DeleteImageHandler implements RequestHandler<APIGatewayProxyRequest
 
             return ResponseUtils.successResponse(200, Map.of("message", "Image moved to recycle bin: "+ imageKey));
         } catch (Exception e) {
+            context.getLogger().log("Error permanently deleting image: " + e.getMessage());
             return ResponseUtils.errorResponse(500, "Internal server error");
         }
     }

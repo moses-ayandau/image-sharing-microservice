@@ -1,0 +1,79 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SAM template for Cognito User Pool restore from DynamoDB Global Tables
+
+Parameters:
+  BackupTableName:
+    Type: String
+    Default: CognitoBackups
+    Description: Name of the DynamoDB Global Table containing backups
+  RestoreUserPoolId:
+    Type: String
+    Description: The ID of the Cognito user pool to restore into
+  DefaultPassword:
+    Type: String
+    Default: "ChangeMe123!"
+    Description: Default password for restored users
+    NoEcho: true
+
+Resources:
+  CognitoRestoreRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: CognitoRestorePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cognito-idp:AdminCreateUser
+                  - cognito-idp:AdminSetUserPassword
+                  - cognito-idp:AdminUpdateUserAttributes
+                Resource: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${RestoreUserPoolId}"
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${BackupTableName}*"
+
+  CognitoRestoreFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: RestoreFunction/
+      Handler: recovery.RestoreHandler::handleRequest
+      Runtime: java21
+      Architectures:
+        - x86_64
+      MemorySize: 512
+      Timeout: 900
+      Role: !GetAtt CognitoRestoreRole.Arn
+      Environment:
+        Variables:
+          BACKUP_TABLE: !Ref BackupTableName
+          RESTORE_USER_POOL: !Ref RestoreUserPoolId
+          DEFAULT_PASSWORD: !Ref DefaultPassword
+
+  RestoreLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${CognitoRestoreFunction}"
+      RetentionInDays: 14
+
+Outputs:
+  RestoreFunctionArn:
+    Description: ARN of the Cognito restore Lambda function
+    Value: !GetAtt CognitoRestoreFunction.Arn
+  CloudWatchLogGroup:
+    Description: CloudWatch Log Group for the restore function
+    Value: !Ref RestoreLogGroup

@@ -5,22 +5,6 @@
 
 A serverless, cloud-native image processing application deployed on AWS. This application allows users to upload, process, share, and manage their photos with features like recycling bin, auth protection, and multi-region resilience.
 
-## 📋 Table of Contents
-
-- [Overview](#overview)
-- [Features](#features)
-- [Architecture](#architecture)
-- [Components](#components)
-- [Infrastructure as Code](#infrastructure-as-code)
-- [Deployment](#deployment)
-- [Environment Variables](#environment-variables)
-- [API Endpoints](#api-endpoints)
-- [Security Features](#security-features)
-- [High Availability & Disaster Recovery](#high-availability--disaster-recovery)
-- [Monitoring and Alerting](#monitoring-and-alerting)
-- [Contributing](#contributing)
-- [License](#license)
-
 ## 🔍 Overview
 
 This application is built using AWS Serverless technology stack, utilizing services such as Lambda, API Gateway, S3, DynamoDB, Cognito, SQS, and CloudWatch. It's designed to be scalable, fault-tolerant, and easy to deploy across multiple environments.

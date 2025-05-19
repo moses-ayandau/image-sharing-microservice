@@ -830,7 +830,7 @@ Resources:
            ENVIRONMENT: !Ref Environment
        Policies:
          - DynamoDBCrudPolicy:
-             TableName: !Ref ImageTableName
+             TableName: !Ref PhotoTable
          - S3CrudPolicy:
              BucketName: !Ref ProcessedBucket
 
@@ -856,7 +856,7 @@ Resources:
            ENVIRONMENT: !Ref Environment
        Policies:
          - DynamoDBCrudPolicy:
-             TableName: !Ref ImageTableName
+             TableName: !Ref PhotoTable
          - S3CrudPolicy:
              BucketName: !Ref ProcessedBucket
        Events:
@@ -881,7 +881,7 @@ Resources:
            ENVIRONMENT: !Ref Environment
        Policies:
          - DynamoDBCrudPolicy:
-             TableName: !Ref ImageTableName
+             TableName: !Ref PhotoTable
          - S3CrudPolicy:
              BucketName: !Ref ProcessedBucket
        Events:

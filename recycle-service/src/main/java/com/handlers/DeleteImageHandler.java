@@ -52,6 +52,9 @@ public class DeleteImageHandler implements RequestHandler<APIGatewayProxyRequest
                 return ResponseUtils.errorResponse(400, "Missing or empty userId");
             }
 
+            context.getLogger().log("Image Key: " + imageKey);
+            context.getLogger().log("Image table: "+ tableName);
+
             Map<String, AttributeValue> item;
 
             context.getLogger().log("Image Key:  "+  imageKey);
@@ -81,4 +84,5 @@ public class DeleteImageHandler implements RequestHandler<APIGatewayProxyRequest
             return ResponseUtils.errorResponse(500, "Internal server error");
         }
     }
+
 }

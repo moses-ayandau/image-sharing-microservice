@@ -27,12 +27,12 @@ private final Logger logger  = LoggerFactory.getLogger(DynamoDBUtils.class);
                 .build();
 
         GetItemResponse response = dynamoDbClient.getItem(request);
-        logger.info("request:  "+ request);
+        logger.info("request:  " + request);
 
         if (response.item().isEmpty()) {
             throw new RuntimeException("Image not found in database");
         }
-        logger.info("Response: " + response);
+        logger.info("Response: "+ response);
         return response.item();
     }
 

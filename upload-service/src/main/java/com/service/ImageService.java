@@ -117,8 +117,7 @@ public class ImageService {
         messageAttributes.put("firstName", firstName);
         messageAttributes.put("lastName", lastName);
         messageAttributes.put("email", email);
-//        messageAttributes.put("key", fileName);
-        messageAttributes.put("key", "incorrect");
+        messageAttributes.put("key", fileName);
         messageAttributes.put("uploadDate", new java.util.Date().toString());
         messageAttributes.put("imageTitle", imageTitle != null ? imageTitle : "");
 

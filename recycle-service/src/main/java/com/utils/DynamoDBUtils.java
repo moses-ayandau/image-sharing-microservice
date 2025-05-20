@@ -1,9 +1,6 @@
 package com.utils;
 
-import com.amazonaws.services.lambda.runtime.Context;
 import com.factories.AwsFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.*;
 
@@ -12,14 +9,11 @@ import java.util.Map;
 
 public class DynamoDBUtils {
     String imageUrl = "https://image-processed-bucket-prod-861276111046.s3.us-east-1.amazonaws.com/";
-    public static final String IMAGE_ID = "imageKey";
     private static DynamoDbClient dynamoDbClient = AwsFactory.dynamoDbClient();
 
     public DynamoDBUtils() {
         this.dynamoDbClient = AwsFactory.dynamoDbClient();
     }
-
-    private static final Logger logger  = LoggerFactory.getLogger(DynamoDBUtils.class);
 
     public  Map<String, AttributeValue> getItemFromDynamo(String tableName, String imageKey) {
         String url = imageUrl + imageKey;

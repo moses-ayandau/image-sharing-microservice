@@ -23,106 +23,86 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 public class DynamoDBUtilsTest {
 
-    @Test
-    public void testSimple() {
-        // Simple test that always passes
-        assertTrue(true);
+    @Mock
+    private DynamoDbClient mockDynamoDbClient;
+
+    private DynamoDBUtils dynamoDBUtils;
+
+    private static final String TABLE_NAME = "test-table";
+    private static final String IMAGE_ID_VALUE = "test-image-id";
+    private static final String IMAGE_URL = "https://image-processed-bucket-prod-861276111046.s3.us-east-1.amazonaws.com/" + IMAGE_ID_VALUE;
+
+    @BeforeEach
+    void setUp() {
+        try (MockedStatic<AwsFactory> mockedStatic = Mockito.mockStatic(AwsFactory.class)) {
+            mockedStatic.when(AwsFactory::dynamoDbClient).thenReturn(mockDynamoDbClient);
+            dynamoDBUtils = new DynamoDBUtils();
+        }
     }
-//    @Mock
-//    private DynamoDbClient mockDynamoDbClient;
-//
-//    private DynamoDBUtils dynamoDBUtils;
-//
-//    private static final String TABLE_NAME = "test-table";
-//    private static final String IMAGE_ID_VALUE = "test-image-id";
-//
-//    @BeforeEach
-//    void setUp() {
-//        try (MockedStatic<AwsFactory> mockedStatic = Mockito.mockStatic(AwsFactory.class)) {
-//            mockedStatic.when(AwsFactory::dynamoDbClient).thenReturn(mockDynamoDbClient);
-//
-//            dynamoDBUtils = new DynamoDBUtils();
-//        }
-//    }
-//
-//    @Test
-//    void testGetItemFromDynamo_Success() {
-//        Map<String, AttributeValue> expectedItem = new HashMap<>();
-//        expectedItem.put("imageKey", AttributeValue.fromS(IMAGE_ID_VALUE));
-//        expectedItem.put("status", AttributeValue.fromS("PROCESSED"));
-//
-//        GetItemResponse mockResponse = GetItemResponse.builder()
-//                .item(expectedItem)
-//                .build();
-//
-//        when(mockDynamoDbClient.getItem(any(GetItemRequest.class))).thenReturn(mockResponse);
-//
-//        Map<String, AttributeValue> result = dynamoDBUtils.getItemFromDynamo(TABLE_NAME, IMAGE_ID_VALUE);
-//        assertEquals(expectedItem, result);
-//        verify(mockDynamoDbClient).getItem(any(GetItemRequest.class));
-//    }
-//
-//    @Test
-//    void testGetItemFromDynamo_ItemNotFound() {
-//        GetItemResponse mockResponse = GetItemResponse.builder()
-//                .item(Collections.emptyMap())
-//                .build();
-//
-//        when(mockDynamoDbClient.getItem(any(GetItemRequest.class))).thenReturn(mockResponse);
-//        Exception exception = assertThrows(RuntimeException.class, () -> {
-//            dynamoDBUtils.getItemFromDynamo(TABLE_NAME, IMAGE_ID_VALUE);
-//        });
-//
-//        assertEquals("Image not found in database", exception.getMessage());
-//    }
-//
-//    @Test
-//    void testDeleteRecordFromDynamo() {
-//        dynamoDBUtils.deleteRecordFromDynamo(TABLE_NAME, IMAGE_ID_VALUE);
-//
-//        ArgumentCaptor<DeleteItemRequest> requestCaptor = ArgumentCaptor.forClass(DeleteItemRequest.class);
-//        verify(mockDynamoDbClient).deleteItem(requestCaptor.capture());
-//
-//        DeleteItemRequest capturedRequest = requestCaptor.getValue();
-//        assertEquals(TABLE_NAME, capturedRequest.tableName());
-//        assertEquals(IMAGE_ID_VALUE, capturedRequest.key().get(DynamoDBUtils.IMAGE_ID).s());
-//    }
-//
-//    @Test
-//    void testUpdateImageStatus() {
-//        String status = "COMPLETED";
-//
-//        dynamoDBUtils.updateImageStatus(TABLE_NAME, IMAGE_ID_VALUE, status);
-//
-//        ArgumentCaptor<UpdateItemRequest> requestCaptor = ArgumentCaptor.forClass(UpdateItemRequest.class);
-//        verify(mockDynamoDbClient).updateItem(requestCaptor.capture());
-//
-//        UpdateItemRequest capturedRequest = requestCaptor.getValue();
-//        assertEquals(TABLE_NAME, capturedRequest.tableName());
-//        assertEquals(IMAGE_ID_VALUE, capturedRequest.key().get(DynamoDBUtils.IMAGE_ID).s());
-//        assertEquals("SET #status = :status", capturedRequest.updateExpression());
-//        assertTrue(capturedRequest.expressionAttributeNames().containsKey("#status"));
-//        assertEquals("status", capturedRequest.expressionAttributeNames().get("#status"));
-//        assertTrue(capturedRequest.expressionAttributeValues().containsKey(":status"));
-//        assertEquals(status, capturedRequest.expressionAttributeValues().get(":status").s());
-//    }
-//
-//    @Test
-//    void testUpdateS3Key() {
-//        String newS3Key = "new/s3/key/path.jpg";
-//
-//        dynamoDBUtils.updateS3Key(TABLE_NAME, IMAGE_ID_VALUE, newS3Key);
-//
-//        ArgumentCaptor<UpdateItemRequest> requestCaptor = ArgumentCaptor.forClass(UpdateItemRequest.class);
-//        verify(mockDynamoDbClient).updateItem(requestCaptor.capture());
-//
-//        UpdateItemRequest capturedRequest = requestCaptor.getValue();
-//        assertEquals(TABLE_NAME, capturedRequest.tableName());
-//        assertEquals(IMAGE_ID_VALUE, capturedRequest.key().get(DynamoDBUtils.IMAGE_ID).s());
-//        assertEquals("SET #s3Key = :newS3Key", capturedRequest.updateExpression());
-//        assertTrue(capturedRequest.expressionAttributeNames().containsKey("#s3Key"));
-//        assertEquals("S3Key", capturedRequest.expressionAttributeNames().get("#s3Key"));
-//        assertTrue(capturedRequest.expressionAttributeValues().containsKey(":newS3Key"));
-//        assertEquals(newS3Key, capturedRequest.expressionAttributeValues().get(":newS3Key").s());
-//    }
+
+    @Test
+    void testGetItemFromDynamo_Success() {
+        Map<String, AttributeValue> expectedItem = new HashMap<>();
+        expectedItem.put("imageKey", AttributeValue.fromS(IMAGE_ID_VALUE));
+        expectedItem.put("status", AttributeValue.fromS("PROCESSED"));
+
+        GetItemResponse mockResponse = GetItemResponse.builder()
+                .item(expectedItem)
+                .build();
+
+        when(mockDynamoDbClient.getItem(any(GetItemRequest.class))).thenReturn(mockResponse);
+
+        Map<String, AttributeValue> result = dynamoDBUtils.getItemFromDynamo(TABLE_NAME, IMAGE_ID_VALUE);
+        assertEquals(expectedItem, result);
+        verify(mockDynamoDbClient).getItem(any(GetItemRequest.class));
+    }
+
+    @Test
+    void testDeleteRecordFromDynamo() {
+        dynamoDBUtils.deleteRecordFromDynamo(TABLE_NAME, IMAGE_ID_VALUE);
+
+        ArgumentCaptor<DeleteItemRequest> requestCaptor = ArgumentCaptor.forClass(DeleteItemRequest.class);
+        verify(mockDynamoDbClient).deleteItem(requestCaptor.capture());
+
+        DeleteItemRequest capturedRequest = requestCaptor.getValue();
+        assertEquals(TABLE_NAME, capturedRequest.tableName());
+        assertEquals(IMAGE_ID_VALUE, capturedRequest.key().get("imageKey").s());
+        assertEquals(IMAGE_URL, capturedRequest.key().get("imageUrl").s());
+    }
+
+    @Test
+    void testUpdateImageStatus() {
+        String status = "COMPLETED";
+
+        dynamoDBUtils.updateImageStatus(TABLE_NAME, IMAGE_ID_VALUE, status);
+
+        ArgumentCaptor<UpdateItemRequest> requestCaptor = ArgumentCaptor.forClass(UpdateItemRequest.class);
+        verify(mockDynamoDbClient).updateItem(requestCaptor.capture());
+
+        UpdateItemRequest capturedRequest = requestCaptor.getValue();
+        assertEquals(TABLE_NAME, capturedRequest.tableName());
+        assertEquals(IMAGE_ID_VALUE, capturedRequest.key().get("imageKey").s());
+        assertEquals(IMAGE_URL, capturedRequest.key().get("imageUrl").s());
+        assertEquals("SET #status = :status", capturedRequest.updateExpression());
+        assertEquals("status", capturedRequest.expressionAttributeNames().get("#status"));
+        assertEquals(status, capturedRequest.expressionAttributeValues().get(":status").s());
+    }
+
+    @Test
+    void testUpdateS3Key() {
+        String newS3Key = "new/s3/key/path.jpg";
+
+        dynamoDBUtils.updateS3Key(TABLE_NAME, IMAGE_ID_VALUE, newS3Key);
+
+        ArgumentCaptor<UpdateItemRequest> requestCaptor = ArgumentCaptor.forClass(UpdateItemRequest.class);
+        verify(mockDynamoDbClient).updateItem(requestCaptor.capture());
+
+        UpdateItemRequest capturedRequest = requestCaptor.getValue();
+        assertEquals(TABLE_NAME, capturedRequest.tableName());
+        assertEquals(IMAGE_ID_VALUE, capturedRequest.key().get("imageKey").s());
+        assertEquals(IMAGE_URL, capturedRequest.key().get("imageUrl").s());
+        assertEquals("SET #newS3KeyField = :newS3Key", capturedRequest.updateExpression());
+        assertEquals("s3Key", capturedRequest.expressionAttributeNames().get("#newS3KeyField"));
+        assertEquals(newS3Key, capturedRequest.expressionAttributeValues().get(":newS3Key").s());
+    }
 }

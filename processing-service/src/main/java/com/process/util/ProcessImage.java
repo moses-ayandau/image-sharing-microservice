@@ -7,8 +7,11 @@ import com.process.service.S3Service;
 import com.process.service.SqsService;
 
 import java.util.UUID;
+import java.util.logging.Logger;
 
 public class ProcessImage {
+    private static final Logger logger = Logger.getLogger(ProcessImage.class.getName());
+
     private final DynamoDbService dynamoDbService;
     private final EmailService emailService;
     private final ImageProcessor imageProcessor;
@@ -26,70 +29,98 @@ public class ProcessImage {
 
     public void processImage(Context context, String bucket, String key, String userId,
                              String email, String firstName, String lastName, String imageTitle) {
+        // Use retry count = 1 as default
+        processImage(context, bucket, key, userId, email, firstName, lastName, imageTitle, 1);
+    }
+
+    public void processImage(Context context, String bucket, String key, String userId,
+                             String email, String firstName, String lastName, String imageTitle,
+                             int retryCount) {
         try {
-            context.getLogger().log("Retrieving image from S3: " + bucket + "/" + key);
+            logger.info("Starting image processing " + (retryCount > 1 ? "(retry attempt #" + retryCount + ")" : ""));
+            logger.info("Retrieving image from S3: " + bucket + "/" + key);
+
             byte[] imageData = s3Service.getImageFromS3(bucket, key);
 
             if (imageData == null || imageData.length == 0) {
-                context.getLogger().log("Retrieved empty image data from S3");
+                logger.warning("Retrieved empty image data from S3");
                 return;
             }
 
-            context.getLogger().log("Retrieved image data size: " + imageData.length + " bytes");
+            logger.info("Retrieved image data size: " + imageData.length + " bytes");
 
-            context.getLogger().log("Adding watermark to image");
-            emailService.sendProcessingStartEmail(email, firstName);
+            logger.info("Adding watermark to image");
+
+            // Only send processing start email on first attempt
+            if (retryCount == 1) {
+                emailService.sendProcessingStartEmail(email, firstName);
+            }
+
             byte[] watermarkedImage = imageProcessor.addWatermark(imageData, firstName, lastName);
 
             if (watermarkedImage == null || watermarkedImage.length == 0) {
-                context.getLogger().log("Watermarking process returned empty data");
+                logger.warning("Watermarking process returned empty data");
                 return;
             }
 
-            context.getLogger().log("Watermarked image size: " + watermarkedImage.length + " bytes");
+            logger.info("Watermarked image size: " + watermarkedImage.length + " bytes");
             String processedKey = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
 
-            context.getLogger().log("Uploading processed image to S3");
+            logger.info("Uploading processed image to S3");
             s3Service.uploadToProcessedBucket(watermarkedImage, processedKey);
 
-            context.getLogger().log("Storing image metadata in DynamoDB");
+            logger.info("Storing image metadata in DynamoDB");
             String imageUrl = "https://" + System.getenv("PROCESSED_BUCKET") + ".s3." +
                     System.getenv("AWS_REGION") + ".amazonaws.com/" + processedKey;
 
-            dynamoDbService.storeImageMetadata(userId, processedKey, imageTitle,  imageUrl);
+            dynamoDbService.storeImageMetadata(userId, processedKey, imageTitle, imageUrl);
 
-            context.getLogger().log("Deleting original image from staging bucket");
+            logger.info("Deleting original image from staging bucket");
             s3Service.deleteFromStagingBucket(bucket, key);
 
-            context.getLogger().log("Sending completion email to: " + email);
+            logger.info("Sending completion email to: " + email);
             if (email != null && !email.trim().isEmpty()) {
                 try {
                     emailService.sendProcessingCompleteEmail(email, firstName, processedKey);
-                    context.getLogger().log("Email sent to the receiver");
+                    logger.info("Email sent to the receiver");
                 } catch (Exception e) {
-                    context.getLogger().log("Failed to send email: " + e.getMessage());
+                    logger.warning("Failed to send email: " + e.getMessage());
                 }
             }
 
-            context.getLogger().log("Successfully processed image: " + key);
+            logger.info("Successfully processed image: " + key +
+                    (retryCount > 1 ? " (after " + retryCount + " attempts)" : ""));
+
         } catch (Exception e) {
-            context.getLogger().log("Error processing image: " + e.getClass().getName() + ": " + e.getMessage());
+            logger.severe("Error processing image: " + e.getClass().getName() + ": " + e.getMessage());
             if (e.getCause() != null) {
-                context.getLogger().log("Caused by: " + e.getCause().getMessage());
+                logger.severe("Caused by: " + e.getCause().getMessage());
             }
 
             for (StackTraceElement element : e.getStackTrace()) {
-                context.getLogger().log("  at " + element.toString());
+                logger.fine("  at " + element.toString());
             }
 
-            // Send failure email
-            emailService.sendProcessingFailureEmail(email, firstName);
+            // Send failure email - only on first failure or final attempt
+            boolean isFinalAttempt = retryCount >= 5;
+            if (retryCount == 1 || isFinalAttempt) {
+                try {
+                    emailService.sendProcessingFailureEmail(email, firstName);
 
-            // Queue message to RetryQueue for reprocessing
-            context.getLogger().log("Queuing image for retry: " + key);
-            sqsService.queueForRetry(bucket, key, userId, email, firstName, lastName, imageTitle);
+                    if (isFinalAttempt) {
+                        logger.warning("Final attempt failed - no more retries for image: " + key);
+                    }
+                } catch (Exception emailEx) {
+                    logger.warning("Could not send failure email: " + emailEx.getMessage());
+                }
+            }
 
-            throw new RuntimeException("Failed to process image", e);
+            // Increment retry count and queue message for RetryQueue
+            int newRetryCount = retryCount + 1;
+            logger.info("Queuing image for retry attempt #" + newRetryCount + ": " + key);
+            sqsService.queueForRetry(bucket, key, userId, email, firstName, lastName, imageTitle, newRetryCount);
+
+            throw new RuntimeException("Failed to process image (retry attempt #" + retryCount + ")", e);
         }
     }
 }

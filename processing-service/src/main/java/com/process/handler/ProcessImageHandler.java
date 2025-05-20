@@ -11,8 +11,11 @@ import com.process.service.SqsService;
 import com.process.util.*;
 
 import java.util.Map;
+import java.util.logging.Logger;
 
 public class ProcessImageHandler implements RequestHandler<SQSEvent, String> {
+
+    private static final Logger logger = Logger.getLogger(ProcessImageHandler.class.getName());
 
     private final S3Service s3Service;
     private final ProcessImage processImage;
@@ -38,10 +41,10 @@ public class ProcessImageHandler implements RequestHandler<SQSEvent, String> {
 
     @Override
     public String handleRequest(SQSEvent sqsEvent, Context context) {
-        context.getLogger().log("Starting to process " + sqsEvent.getRecords().size() + " messages");
+        logger.info("Starting to process " + sqsEvent.getRecords().size() + " messages");
 
         for (SQSEvent.SQSMessage message : sqsEvent.getRecords()) {
-            context.getLogger().log("Processing message: " + message.getBody());
+            logger.info("Processing message: " + message.getBody());
 
             try {
                 // Parse JSON message body
@@ -56,30 +59,41 @@ public class ProcessImageHandler implements RequestHandler<SQSEvent, String> {
                 String lastName = getValueOrDefault(messageData, "lastName", "");
                 String imageTitle = getValueOrDefault(messageData, "imageTitle", "");
 
+                // Get retry count from message attributes (or default to 1 if not present)
+                int retryCount = 1;
+                if (message.getMessageAttributes() != null &&
+                        message.getMessageAttributes().containsKey("RetryCount")) {
+                    retryCount = Integer.parseInt(
+                            message.getMessageAttributes().get("RetryCount").getStringValue());
+                }
+
                 // Log extracted values
-                context.getLogger().log("Message parts:");
-                context.getLogger().log("  Bucket: " + bucket);
-                context.getLogger().log("  Key: " + key);
-                context.getLogger().log("  UserId: " + userId);
-                context.getLogger().log("  FirstName: " + firstName);
-                context.getLogger().log("  LastName: " + lastName);
-                context.getLogger().log("  ImageTitle: " + imageTitle);
+                logger.info("Message parts:");
+                logger.info("  Bucket: " + bucket);
+                logger.info("  Key: " + key);
+                logger.info("  UserId: " + userId);
+                logger.info("  FirstName: " + firstName);
+                logger.info("  LastName: " + lastName);
+                logger.info("  ImageTitle: " + imageTitle);
+                logger.info("  RetryCount: " + retryCount);
 
                 // Validate key is present
                 if (key == null || key.isEmpty()) {
-                    context.getLogger().log("Missing required field 'key' in message");
+                    logger.warning("Missing required field 'key' in message");
                     continue;
                 }
 
                 if (!s3Service.objectExists(bucket, key)) {
-                    context.getLogger().log("Original file no longer exists: " + bucket + "/" + key);
+                    logger.warning("Original file no longer exists: " + bucket + "/" + key);
                     continue;
                 }
 
-                processImage.processImage(context, bucket, key, userId, email, firstName, lastName, imageTitle);
+                // Process image with retry count information
+                processImage.processImage(context, bucket, key, userId, email, firstName,
+                        lastName, imageTitle, retryCount);
 
             } catch (Exception e) {
-                context.getLogger().log("Error processing message: " + e.getMessage());
+                logger.severe("Error processing message: " + e.getMessage());
                 e.printStackTrace();
             }
         }

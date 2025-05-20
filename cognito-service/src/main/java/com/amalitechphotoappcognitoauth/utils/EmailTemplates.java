@@ -22,7 +22,7 @@ public class EmailTemplates {
                         padding: 20px;
                     }
                     .header { 
-                        background-color: #4285f4; 
+                        background-color: #c41061; 
                         color: white; 
                         padding: 20px; 
                         text-align: center; 
@@ -36,7 +36,7 @@ public class EmailTemplates {
                     }
                     .button {
                         display: inline-block;
-                        background-color: #4285f4;
+                        background-color: #c41061;
                         color: white;
                         padding: 10px 20px;
                         text-decoration: none;
@@ -110,7 +110,7 @@ public class EmailTemplates {
                 <p><strong>Time:</strong> %s</p>
                 <p><strong>Device:</strong> %s</p>
                 <p>If this was you, no action is needed. If you didn't sign in recently, please reset your password immediately.</p>
-                <p><a href="%s/auth/reset-password" class="button">Reset Password</a></p>
+                <p><a href="%s/reset-password" class="button">Reset Password</a></p>
                 <p>Security is our top priority. If you have any concerns, please contact our support team.</p>
                 """, userName, timestamp, deviceDetails, APP_URL);
 

@@ -27,10 +27,10 @@ public class BackupHandler implements RequestHandler<ScheduledEvent, String> {
     public BackupHandler() {
         // Initialize AWS clients
         this.cognitoClient = CognitoIdentityProviderClient.builder()
-                .region(Region.EU_CENTRAL_1)
+                .region(Region.US_EAST_1)
                 .build();
         this.dynamoDbClient = DynamoDbClient.builder()
-                .region(Region.EU_CENTRAL_1)
+                .region(Region.US_EAST_1)
                 .build();
 
         // Get environment variables

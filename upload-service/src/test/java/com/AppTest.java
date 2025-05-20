@@ -1,60 +1,98 @@
 package com;
 
+import com.amazonaws.services.lambda.runtime.Context;
+import com.amazonaws.services.lambda.runtime.LambdaLogger;
+import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
+import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.service.ImageService;
+import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+import java.util.HashMap;
+import java.util.Map;
+
 import static org.junit.Assert.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
 public class AppTest {
-    
-    @Test
-    public void testSimple() {
-        // Simple test that always passes
-        assertTrue(true);
-    }
-    
-    /*
-    // Original tests commented out
+
+    @Mock
+    private ImageService imageService;
+
     @Mock
     private Context context;
     
     @Mock
-    private LambdaLogger logger;
-    
-    @Mock
-    private ImageService imageService;
-    
+    private LambdaLogger lambdaLogger;
+
     private App app;
     private ObjectMapper objectMapper = new ObjectMapper();
-    
+
     @Before
-    public void setUp() throws Exception {
-        MockitoAnnotations.openMocks(this);
-        when(context.getLogger()).thenReturn(logger);
+    public void setUp() {
+        MockitoAnnotations.initMocks(this);
+        // Mock the logger
+        when(context.getLogger()).thenReturn(lambdaLogger);
         
         app = new App();
-        
-        // Use reflection to set the imageService field
-        Field imageServiceField = App.class.getDeclaredField("imageService");
-        imageServiceField.setAccessible(true);
-        imageServiceField.set(app, imageService);
+        app.setImageService(imageService);
     }
-    
+
     @Test
-    public void testHandleOptions() {
+    public void testHandleRequestWithValidInput() throws Exception {
         // Setup
-        APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent()
-                .withHttpMethod("OPTIONS");
+        APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Content-Type", "application/json");
+        headers.put("Authorization", "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIiwibmFtZSI6IkpvaG4gRG9lIiwiZW1haWwiOiJqb2huQGV4YW1wbGUuY29tIn0.kD3KXUhjYYC-Uw4IiLzZGGvkVJXXT5_UwkrS4IjCz0I");
+        request.setHeaders(headers);
+        request.setHttpMethod("POST");
         
-        // Test
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("image", "SGVsbG8gV29ybGQ="); // "Hello World" in base64
+        requestBody.put("contentType", "image/jpeg");
+        requestBody.put("imageTitle", "Test Image");
+        
+        request.setBody(objectMapper.writeValueAsString(requestBody));
+        
+        // Mock ImageService response
+        Map<String, Object> serviceResponse = new HashMap<>();
+        serviceResponse.put("url", "https://example.com/test-image.jpg");
+        serviceResponse.put("message", "Image uploaded successfully");
+        serviceResponse.put("name", "John Doe");
+        serviceResponse.put("firstName", "John");
+        serviceResponse.put("lastName", "Doe");
+        serviceResponse.put("email", "john@example.com");
+        
+        when(imageService.processImageUpload(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), any()))
+                .thenReturn(serviceResponse);
+        
+        // Execute
         APIGatewayProxyResponseEvent response = app.handleRequest(request, context);
         
         // Verify
+        assertNotNull(response);
         assertEquals(200, response.getStatusCode().intValue());
-        assertNotNull(response.getHeaders());
-        assertTrue(response.getHeaders().containsKey("Access-Control-Allow-Origin"));
-        assertTrue(response.getHeaders().containsKey("Access-Control-Allow-Methods"));
-        assertTrue(response.getHeaders().containsKey("Access-Control-Allow-Headers"));
+        assertTrue(response.getBody().contains("Image uploaded successfully"));
     }
-    
-    // Other test methods commented out...
-    */
+
+    @Test
+    public void testHandleRequestWithInvalidInput() {
+        // Setup - empty request
+        APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
+        request.setHttpMethod("POST");
+        
+        // Execute
+        APIGatewayProxyResponseEvent response = app.handleRequest(request, context);
+        
+        // Verify
+        assertNotNull(response);
+        assertEquals(400, response.getStatusCode().intValue());
+        assertTrue(response.getBody().contains("error"));
+    }
 }

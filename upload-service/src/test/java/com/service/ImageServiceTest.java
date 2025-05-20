@@ -1,48 +1,76 @@
+
 package com.service;
 
+import com.repository.S3Repository;
+import com.repository.SqsRepository;
+import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+import java.util.HashMap;
+import java.util.Map;
+
 import static org.junit.Assert.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
 public class ImageServiceTest {
-    
+
+    @Mock
+    private S3Repository s3Repository;
+
+    @Mock
+    private SqsRepository sqsRepository;
+
+    private ImageService imageService;
+
+    @Before
+    public void setUp() {
+        MockitoAnnotations.initMocks(this);
+        imageService = new ImageService(s3Repository, sqsRepository);
+    }
+
     @Test
-    public void testSimple() {
-        // Simple test that always passes
-        assertTrue(true);
+    public void testConstructor() {
+        // Test default constructor
+        ImageService defaultService = new ImageService();
+        assertNotNull(defaultService);
+        
+        // Test constructor with dependencies
+        ImageService service = new ImageService(s3Repository, sqsRepository);
+        assertNotNull(service);
     }
     
-    /*
-    // Original tests commented out
     @Test
-    public void testProcessImageUpload_Success() throws Exception {
-        // Sample base64 encoded small PNG image
-        String base64Image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    public void testProcessImageUploadWithValidData() throws Exception {
+        // Setup
         String name = "John Doe";
-        String email = "john.doe@example.com";
-        String contentType = "image/png";
+        String email = "john@example.com";
+        String imageBase64 = "SGVsbG8gV29ybGQ="; // "Hello World" in base64
+        String contentType = "image/jpeg";
         String imageTitle = "Test Image";
+        String userId = "user123";
         
-        // Mock S3 repository
-        when(mockS3Repository.uploadFile(anyString(), any(byte[].class), anyString(), any(Map.class)))
-            .thenReturn("https://test-bucket.s3.amazonaws.com/uploads/test-file.png");
+        // Mock S3 upload
+        when(s3Repository.uploadFile(anyString(), any(byte[].class), anyString(), any(Map.class)))
+                .thenReturn("https://example.com/test-image.jpg");
         
-        // Test
-        Map<String, Object> result = imageService.processImageUpload(name, email, base64Image, contentType, imageTitle);
+        // Mock SQS send
+        Map<String, Object> sqsResponse = new HashMap<>();
+        sqsResponse.put("success", true);
+        sqsResponse.put("messageId", "msg123");
+        when(sqsRepository.sendMessage(any(Map.class), any())).thenReturn(sqsResponse);
+        
+        // Execute
+        Map<String, Object> result = imageService.processImageUpload(name, email, imageBase64, contentType, imageTitle, userId, null);
         
         // Verify
         assertNotNull(result);
-        assertEquals("https://test-bucket.s3.amazonaws.com/uploads/test-file.png", result.get("url"));
-        assertEquals("Image uploaded successfully", result.get("message"));
-        assertEquals("John Doe", result.get("name"));
+        assertTrue(result.containsKey("url"));
+        assertTrue(result.containsKey("message"));
         assertEquals("John", result.get("firstName"));
         assertEquals("Doe", result.get("lastName"));
-        assertEquals("john.doe@example.com", result.get("email"));
-        assertEquals("Test Image", result.get("imageTitle"));
-        
-        // Verify SQS message attributes
-        verify(mockSqsRepository).sendMessage(any(Map.class));
     }
-    
-    // Other test methods commented out...
-    */
 }

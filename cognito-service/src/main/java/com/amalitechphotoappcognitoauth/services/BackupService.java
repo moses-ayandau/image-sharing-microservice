@@ -9,6 +9,8 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -146,6 +148,9 @@ public class BackupService {
                                        String backupTable,
                                        String userPoolId) {
         try {
+            // Calculate expiry time (30 days from now)
+            long expiryTime = Instant.now().plus(Duration.ofDays(30)).getEpochSecond();
+
             Map<String, AttributeValue> item = new HashMap<>();
             item.put("BackupId", AttributeValue.builder().s(backupId).build());
             item.put("ChunkId", AttributeValue.builder().s("0").build());
@@ -154,6 +159,7 @@ public class BackupService {
             item.put("UserPoolId", AttributeValue.builder().s(userPoolId).build());
             item.put("Data", AttributeValue.builder().s(data).build());
             item.put("TotalChunks", AttributeValue.builder().n("1").build());
+            item.put("ExpiryTime", AttributeValue.builder().n(String.valueOf(expiryTime)).build());
 
             PutItemRequest request = PutItemRequest.builder()
                     .tableName(backupTable)
@@ -191,6 +197,9 @@ public class BackupService {
                                                    String backupTable,
                                                    String userPoolId) {
         try {
+            // Calculate expiry time (30 days from now)
+            long expiryTime = Instant.now().plus(Duration.ofDays(30)).getEpochSecond();
+
             // Check if we need to chunk the data
             if (data.length() <= MAX_DYNAMODB_ITEM_SIZE) {
                 // Data fits in a single item
@@ -203,6 +212,7 @@ public class BackupService {
                 item.put("Data", AttributeValue.builder().s(data).build());
                 item.put("TotalChunks", AttributeValue.builder().n("1").build());
                 item.put("UserCount", AttributeValue.builder().n(String.valueOf(userCount)).build());
+                item.put("ExpiryTime", AttributeValue.builder().n(String.valueOf(expiryTime)).build());
 
                 PutItemRequest request = PutItemRequest.builder()
                         .tableName(backupTable)
@@ -226,6 +236,7 @@ public class BackupService {
                 metadataItem.put("TotalChunks", AttributeValue.builder().n(String.valueOf(totalChunks)).build());
                 metadataItem.put("UserCount", AttributeValue.builder().n(String.valueOf(userCount)).build());
                 metadataItem.put("IsMetadata", AttributeValue.builder().bool(true).build());
+                metadataItem.put("ExpiryTime", AttributeValue.builder().n(String.valueOf(expiryTime)).build());
 
                 PutItemRequest metadataRequest = PutItemRequest.builder()
                         .tableName(backupTable)

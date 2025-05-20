@@ -392,6 +392,9 @@ Resources:
         - Region: !Ref DRRegion
           PointInTimeRecoverySpecification:
             PointInTimeRecoveryEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: ExpiryTime
+        Enabled: true
       AttributeDefinitions:
         - AttributeName: BackupId
           AttributeType: S

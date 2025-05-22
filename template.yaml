@@ -888,6 +888,20 @@ Resources:
              Path: /images/{imageKey}/permanent-delete
              Method: delete
 
+  # Shared IAM Policy for CloudWatch Logs
+  CloudWatchLogsPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: '*'
+
   # ===== Lambda Functions: Authentication =====
 
   WelcomeEmailLambda:
@@ -905,6 +919,7 @@ Resources:
           ENVIRONMENT: !Ref Environment
           APP_URL: !Sub https://mscv2group2.link
       Policies:
+        - !Ref CloudWatchLogsPolicy
         - Version: '2012-10-17'
           Statement:
             - Effect: Allow
@@ -912,12 +927,6 @@ Resources:
                 - ses:SendEmail
                 - ses:SendRawEmail
               Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
-            - Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-              Resource: '*'
 
   SigninAlertLambda:
     Type: AWS::Serverless::Function
@@ -934,6 +943,7 @@ Resources:
           ENVIRONMENT: !Ref Environment
           APP_URL: !Sub https://mscv2group2.link
       Policies:
+        - !Ref CloudWatchLogsPolicy
         - Version: '2012-10-17'
           Statement:
             - Effect: Allow
@@ -941,12 +951,6 @@ Resources:
                 - ses:SendEmail
                 - ses:SendRawEmail
               Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
-            - Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-              Resource: '*'
 
   # ===== Lambda Functions: Health Check =====
   HealthCheckFunction:
@@ -955,6 +959,7 @@ Resources:
       Handler: com.handlers.healthCheck.HealthCheckHandler::handleRequest
       CodeUri: healthcheck-service/
       Policies:
+        - !Ref CloudWatchLogsPolicy
         - Version: '2012-10-17'
           Statement:
             - Effect: Allow
@@ -975,12 +980,6 @@ Resources:
               Action:
                 - cognito-idp:ListUserPools
               Resource: !GetAtt CognitoUserPool.Arn
-            - Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-              Resource: '*'
       Events:
         ApiEvent:
           Type: Api
@@ -1002,6 +1001,7 @@ Resources:
           COGNITO_USER_POOL_ID: !Ref CognitoUserPool
           PROCESSED_BUCKET: !Ref ProcessedBucket
       Policies:
+        - !Ref CloudWatchLogsPolicy
         - Version: '2012-10-17'
           Statement:
             - Effect: Allow
@@ -1028,12 +1028,6 @@ Resources:
                 - cognito-idp:ListUserPools
                 - cognito-idp:DescribeUserPool
               Resource: !GetAtt CognitoUserPool.Arn
-            - Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-              Resource: '*'
       Events:
         ApiEvent:
           Type: Api

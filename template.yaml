@@ -79,7 +79,7 @@ Parameters:
   BackupSchedule:
     Type: String
     Default: rate(24 hours)
-    Description: Schedule expression for backup (e.g., rate(24 hours) or cron(0 1 * * ? *))
+    Description: Schedule expression for backup (e.g., rate(24 hours))
   TableName:
     Type: String
     Default: CognitoBackups
@@ -145,7 +145,7 @@ Resources:
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
         AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
-        AllowOrigin: "'*'"
+        AllowOrigin: "'https://www.mscv2group2.link'"
         MaxAge: "'3600'"
       Auth:
         DefaultAuthorizer: CognitoAuthorizer
@@ -156,15 +156,8 @@ Resources:
               Header: Authorization
         # Important: Add this to ensure OPTIONS requests bypass authorization
         AddDefaultAuthorizerToCorsPreflight: false
-      MethodSettings:
-        - ResourcePath: "/*"
-          HttpMethod: "*"
-          MetricsEnabled: true
-          DataTraceEnabled: true
-          LoggingLevel: INFO
       Tags:
         Environment: !Ref Environment
-  #    DependsOn: ApiGatewayAccount
 
   # SSL Certificate for domain
   APICertificate:

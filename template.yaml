@@ -711,7 +711,7 @@ Resources:
         ScheduledEvent:
           Type: Schedule
           Properties:
-            Schedule: rate(1 hour)
+            Schedule: rate(5 minutes)
             Enabled: true
             Description: "Schedule for DLQ redrive processing"
 

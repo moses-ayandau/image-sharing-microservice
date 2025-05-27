@@ -27,7 +27,6 @@ public class EmailTemplatesTest {
     public void testGetSignInAlertTemplate() {
         String html = EmailTemplates.getSignInAlertTemplate("Test User", "Test Device", "May 16, 2025 at 9:41 AM UTC");
         assertTrue(html.contains("Hello Test User,"));
-//        assertTrue(html.contains("Time: May 16, 2025 at 9:41 AM UTC"));
         assertFalse(html.contains("Device: Unknown Device"));
     }
 }

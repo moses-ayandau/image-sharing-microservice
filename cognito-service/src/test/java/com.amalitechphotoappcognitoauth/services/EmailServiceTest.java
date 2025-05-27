@@ -85,14 +85,4 @@ public class EmailServiceTest {
         verify(mockSesClient, times(1)).sendEmail(any(SendEmailRequest.class));
     }
 
-//    /**
-//     * Test close ses client closed.
-//     */
-//    @Test
-//    public void testClose_SesClientClosed() {
-//        emailService.close();
-//
-//        verifyNoMoreInteractions(mockSesClient, originalSesClient);
-//    }
-
 }

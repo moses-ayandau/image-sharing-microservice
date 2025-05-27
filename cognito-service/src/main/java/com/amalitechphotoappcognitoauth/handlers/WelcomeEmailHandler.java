@@ -35,7 +35,6 @@ public class WelcomeEmailHandler implements RequestHandler<Object, Object> {
             CognitoEvent event = objectMapper.convertValue(input, CognitoEvent.class);
             logger.info("Trigger source: {}", event.getTriggerSource());
 
-            // Check if this is a post confirmation event for user sign-up
             if (event.getTriggerSource() != null &&
                     event.getTriggerSource().equals("PostConfirmation_ConfirmSignUp")) {
 

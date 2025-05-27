@@ -51,7 +51,6 @@ public class BackupService {
 
         String userPoolJson = gson.toJson(userPoolDetails.userPool());
 
-        // Store in DynamoDB
         storeInDynamoDB(backupId, "CONFIG", timestamp, userPoolJson, context, dynamoDbClient, backupTable, userPoolId);
     }
 
@@ -75,7 +74,6 @@ public class BackupService {
 
         List<Map<String, Object>> users = new ArrayList<>();
 
-        // Set up request to list users
         ListUsersRequest listUsersRequest = ListUsersRequest.builder()
                 .userPoolId(userPoolId)
                 .limit(60)
@@ -87,7 +85,6 @@ public class BackupService {
         // Process each page of results
         for (ListUsersResponse response : listUsersResponses) {
             for (UserType user : response.users()) {
-                // Convert each user to a Map
                 Map<String, Object> userMap = new HashMap<>();
                 userMap.put("username", user.username());
                 userMap.put("userStatus", user.userStatusAsString());
@@ -121,7 +118,6 @@ public class BackupService {
 
         String usersJson = gson.toJson(users);
 
-        // Store in DynamoDB, potentially splitting into chunks if needed
         storeInDynamoDBWithChunking(backupId, "USERS", timestamp, usersJson, userCount, context, dynamoDbClient, backupTable, userPoolId);
 
         context.getLogger().log("Backed up " + userCount + " users");

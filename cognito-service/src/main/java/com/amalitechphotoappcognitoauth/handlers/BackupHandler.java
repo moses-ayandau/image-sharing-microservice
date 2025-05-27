@@ -31,7 +31,6 @@ public class BackupHandler implements RequestHandler<ScheduledEvent, String> {
      * Instantiates a new Backup handler.
      */
     public BackupHandler() {
-        // Initialize AWS clients
         this.cognitoClient = CognitoIdentityProviderClient.builder()
                 .region(Region.US_EAST_1)
                 .build();
@@ -39,7 +38,6 @@ public class BackupHandler implements RequestHandler<ScheduledEvent, String> {
                 .region(Region.US_EAST_1)
                 .build();
 
-        // Get environment variables
         this.userPoolId = System.getenv("USER_POOL_ID");
         this.backupTable = System.getenv("BACKUP_TABLE");
 
@@ -50,7 +48,6 @@ public class BackupHandler implements RequestHandler<ScheduledEvent, String> {
                 .create();
     }
 
-    // Custom TypeAdapter for java.time.Instant
     private static class InstantTypeAdapter extends TypeAdapter<Instant> {
         @Override
         public void write(JsonWriter out, Instant instant) throws IOException {

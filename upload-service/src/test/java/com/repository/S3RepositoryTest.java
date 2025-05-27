@@ -33,10 +33,8 @@ public class S3RepositoryTest {
 
     @Test
     public void testConstructor() {
-        // Test default constructor (uses environment variables)
-        try {
+       try {
             S3Repository defaultRepo = new S3Repository();
-            // This might fail if environment variables are not set, but that's expected
             assertNotNull(defaultRepo);
         } catch (Exception e) {
             // Expected if environment variables are not set

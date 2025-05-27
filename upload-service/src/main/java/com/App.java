@@ -6,6 +6,7 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.amazonaws.services.lambda.runtime.LambdaLogger;
 
 import com.service.ImageService;
 import java.util.Base64;
@@ -39,23 +40,18 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
         Map<String, String> headers = getCorsHeaders();
         
-        // Get the logger from the context
         final var logger = context.getLogger();
         
         try {
             if (input.getHttpMethod().equals("OPTIONS")) {
                 logger.log("Handling OPTIONS request");
                 return handleOptions(input, context);
-            }    
+            }
+
             String body = input.getBody();
             JsonNode requestJson = objectMapper.readTree(body);
             
-            // Get token from request body if available, otherwise try header
             String token;
-            if (requestJson.has("token")) {
-                token = requestJson.get("token").asText();
-            } else {
-                // Fall back to header
                 token = input.getHeaders().get("Authorization");
                 if (token != null && token.startsWith("Bearer ")) {
                     token = token.substring(7);
@@ -63,7 +59,7 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
                     logger.log("ERROR: No valid token found in request");
                     throw new IllegalArgumentException("Authentication token is required");
                 }
-            }
+
             
             String name = extractNameFromToken(token, logger);
             String email = extractEmailFromToken(token, logger);
@@ -72,7 +68,6 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
             String imageBase64 = requestJson.has("image") ? requestJson.get("image").asText() : null;
             String contentType = requestJson.has("contentType") ? requestJson.get("contentType").asText() : null;
             
-            // Extract imageTitle if provided
             String imageTitle = null;
             if (requestJson.has("imageTitle")) {
                 imageTitle = requestJson.get("imageTitle").asText();
@@ -86,13 +81,6 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
             Map<String, Object> response = imageService.processImageUpload(name, email, imageBase64, contentType, imageTitle, userId, context);
             logger.log("Image upload response from upload lambda: " + response);
             
-            // Ensure name and email are in the response
-            if (!response.containsKey("name")) {
-                response.put("name", name);
-            }
-            if (!response.containsKey("email")) {
-                response.put("email", email);
-            }
 
             return new APIGatewayProxyResponseEvent()
                 .withStatusCode(200)
@@ -122,12 +110,11 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
     /**
      * Extracts the name from a JWT token.
      * Attempts to find name in common JWT claim fields.
-     *
      * @param token The JWT token string
      * @param logger The Lambda logger
      * @return The extracted name
      */
-    private String extractNameFromToken(String token, com.amazonaws.services.lambda.runtime.LambdaLogger logger) {
+    private String extractNameFromToken(String token, LambdaLogger logger) {
         try {
             String[] parts = token.split("\\.");
             if (parts.length != 3) {
@@ -139,7 +126,6 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
                 String payload = new String(Base64.getUrlDecoder().decode(parts[1]));
                 JsonNode payloadJson = objectMapper.readTree(payload);
                 
-                // Look for "name" first, then fall back to other fields
                 if (payloadJson.has("name")) {
                     return payloadJson.get("name").asText();
                 } else if (payloadJson.has("sub")) {
@@ -162,12 +148,11 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
 
     /**
      * Extracts the email from a JWT token.
-     *
      * @param token The JWT token string
      * @param logger The Lambda logger
      * @return The extracted email
      */
-    private String extractEmailFromToken(String token, com.amazonaws.services.lambda.runtime.LambdaLogger logger) {
+    private String extractEmailFromToken(String token, LambdaLogger logger) {
         try {
             String[] parts = token.split("\\.");
             if (parts.length != 3) {
@@ -206,7 +191,7 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
      * @param logger The Lambda logger
      * @return The extracted subject identifier
      */
-    private String extractSubFromToken(String token, com.amazonaws.services.lambda.runtime.LambdaLogger logger) {
+    private String extractSubFromToken(String token, LambdaLogger logger) {
         try {
             String[] parts = token.split("\\.");
             if (parts.length != 3) {

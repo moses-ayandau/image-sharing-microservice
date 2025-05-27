@@ -140,18 +140,5 @@ public class ImageService {
         return response;
     }
 
-    /**
-     * Overloaded method for backward compatibility that processes an image upload
-     * without an image title.
-     *
-     * @param name         The name of the user uploading the image
-     * @param email        The email of the user uploading the image
-     * @param imageBase64  The base64-encoded image data
-     * @param contentType  The content type of the image (optional, will be detected if null)
-     * @return A map containing the URL of the uploaded image and a success message
-     * @throws Exception If the image processing or upload fails
-     */
-    public Map<String, Object> processImageUpload(String name, String email, String imageBase64, String contentType) throws Exception {
-        return processImageUpload(name, email, imageBase64, contentType, null, null, null);
-    }
+
 }

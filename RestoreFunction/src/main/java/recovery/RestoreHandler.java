@@ -53,22 +53,21 @@ public class RestoreHandler implements RequestHandler<APIGatewayProxyRequestEven
             // Get the backup ID from the request
             String backupId = null;
             
-            // Check if backupId is provided in the path parameters
+
             if (event.getPathParameters() != null && event.getPathParameters().containsKey("backupId")) {
                 backupId = event.getPathParameters().get("backupId");
             } 
-            // Check if backupId is provided in the query string parameters
+
             else if (event.getQueryStringParameters() != null && event.getQueryStringParameters().containsKey("backupId")) {
                 backupId = event.getQueryStringParameters().get("backupId");
             }
-            // Check if backupId is provided in the request body
+
             else if (event.getBody() != null && !event.getBody().isEmpty()) {
                 Map<String, String> body = gson.fromJson(event.getBody(), new TypeToken<Map<String, String>>(){}.getType());
                 backupId = body.get("backupId");
             }
             
             if (backupId == null) {
-                // If no specific backup ID is provided, find the latest backup
                 backupId = RecoveryService.getLatestBackupId(context, backupTable, restoreUserPool, dynamoDbClient);
                 context.getLogger().log("No backup ID provided, using latest: " + backupId);
             }

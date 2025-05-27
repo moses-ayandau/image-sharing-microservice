@@ -66,7 +66,7 @@ public class RecoveryService {
         String userData = "";
 
         if (isChunked) {
-            // For chunked backups, we need to retrieve and combine all chunks
+
             StringBuilder userDataBuilder = new StringBuilder();
 
             for (int i = 1; i <= totalChunks; i++) {
@@ -105,13 +105,11 @@ public class RecoveryService {
                 restoreUser(user, context, userPoolId, "DefaultPassword123!", CognitoIdentityProviderClient.builder().build());
                 restoredCount++;
 
-                // Log progress periodically
                 if (restoredCount % 10 == 0) {
                     context.getLogger().log("Restored " + restoredCount + " users so far");
                 }
             } catch (Exception e) {
                 context.getLogger().log("Error restoring user: " + user.get("username") + " - " + e.getMessage());
-                // Continue with the next user
             }
         }
 
@@ -136,22 +134,22 @@ public class RecoveryService {
 
         for (Map.Entry<String, String> entry : attributes.entrySet()) {
 
-            // Skip the sub attribute as it's managed by Cognito
             if (!entry.getKey().equals("sub")) {
                 cognitoAttributes.add(AttributeType.builder()
                         .name(entry.getKey())
                         .value(entry.getValue())
                         .build());
             }
+
         }
 
         // Create the user in Cognito using email as username
         try {
             AdminCreateUserRequest createRequest = AdminCreateUserRequest.builder()
                     .userPoolId(restoreUserPool)
-                    .username(email)  // Use email as username
+                    .username(email)
                     .temporaryPassword(defaultPassword)
-                    .messageAction(MessageActionType.SUPPRESS) // Don't send welcome emails
+                    .messageAction(MessageActionType.SUPPRESS)
                     .userAttributes(cognitoAttributes)
                     .build();
 
@@ -160,7 +158,7 @@ public class RecoveryService {
             // Set the user's password as permanent
             AdminSetUserPasswordRequest passwordRequest = AdminSetUserPasswordRequest.builder()
                     .userPoolId(restoreUserPool)
-                    .username(email)  // Use email as username
+                    .username(email)
                     .password(defaultPassword)
                     .permanent(true)
                     .build();
@@ -169,10 +167,9 @@ public class RecoveryService {
 
             context.getLogger().log("Successfully restored user: " + username + " with email username: " + email);
         } catch (UsernameExistsException e) {
-            // User already exists, update attributes instead
             AdminUpdateUserAttributesRequest updateRequest = AdminUpdateUserAttributesRequest.builder()
                     .userPoolId(restoreUserPool)
-                    .username(email)  // Use email as username
+                    .username(email)
                     .userAttributes(cognitoAttributes)
                     .build();
 

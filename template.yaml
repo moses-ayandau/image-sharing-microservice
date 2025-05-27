@@ -435,7 +435,7 @@ Resources:
                   - cognito-idp:ListUsers
                   - cognito-idp:ListUsersInGroup
                   - cognito-idp:ListGroups
-                Resource: !Sub "arn:aws:cognito-idp:*:${AWS::AccountId}:userpool/*"
+                Resource: !Sub "arn:aws:cognito-idp:*:${AWS::AccountId}:userpool/${CognitoUserPool}"
               - Effect: Allow
                 Action:
                   - dynamodb:PutItem
@@ -509,8 +509,6 @@ Resources:
                   - sqs:SendMessage
                   - sqs:GetQueueUrl
                 Resource: !GetAtt RetryQueue.Arn
-
-
 
   DeadLetterQueue:
     Type: AWS::SQS::Queue

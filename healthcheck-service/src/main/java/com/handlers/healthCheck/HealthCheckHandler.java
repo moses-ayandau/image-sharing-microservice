@@ -33,7 +33,6 @@ public class HealthCheckHandler implements RequestHandler<APIGatewayProxyRequest
         dateFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
         String timestamp = dateFormat.format(new Date());
 
-        // Create simple response
         String responseBody = String.format(
                 "{" +
                 "\"status\":\"healthy\"," +

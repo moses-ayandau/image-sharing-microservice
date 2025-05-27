@@ -56,17 +56,16 @@ public class BackupService {
         // List to store all users
         List<Map<String, Object>> users = new ArrayList<>();
 
-        // Set up request to list users
+
         ListUsersRequest listUsersRequest = ListUsersRequest.builder()
                 .userPoolId(userPoolId)
-                .limit(60) // Adjust based on your needs
                 .build();
 
         // Use paginator to handle pagination
         ListUsersIterable listUsersResponses = cognitoClient.listUsersPaginator(listUsersRequest);
         int userCount = 0;
 
-        // Process each page of results
+
         for (ListUsersResponse response : listUsersResponses) {
             for (UserType user : response.users()) {
                 // Convert each user to a Map
@@ -84,12 +83,12 @@ public class BackupService {
                             .collect(Collectors.toMap(
                                     AttributeType::name,
                                     AttributeType::value,
-                                    (v1, v2) -> v1 // In case of duplicate keys
+                                    (v1, v2) -> v1
                             ));
                 }
                 userMap.put("attributes", attributes);
 
-                // Process MFA settings if available
+
                 if (user.hasMfaOptions()) {
                     userMap.put("mfaOptions", user.mfaOptions());
                 }
@@ -160,6 +159,7 @@ public class BackupService {
             // Calculate expiry time (30 days from now)
             long expiryTime = Instant.now().plus(Duration.ofDays(30)).getEpochSecond();
 
+
             // Check if we need to chunk the data
             if (data.length() <= MAX_DYNAMODB_ITEM_SIZE) {
                 // Data fits in a single item
@@ -182,7 +182,7 @@ public class BackupService {
                 dynamoDbClient.putItem(request);
                 context.getLogger().log("Successfully stored " + backupType + " backup in DynamoDB with ID: " + backupId);
             } else {
-                // Need to split the data into chunks
+
                 int totalChunks = (int) Math.ceil((double) data.length() / MAX_DYNAMODB_ITEM_SIZE);
                 context.getLogger().log("Splitting backup into " + totalChunks + " chunks");
 

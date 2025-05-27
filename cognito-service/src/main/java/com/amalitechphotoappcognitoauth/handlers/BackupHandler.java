@@ -25,7 +25,7 @@ public class BackupHandler implements RequestHandler<ScheduledEvent, String> {
     private final Gson gson;
 
     public BackupHandler() {
-        // Initialize AWS clients
+
         this.cognitoClient = CognitoIdentityProviderClient.builder()
                 .region(Region.US_EAST_1)
                 .build();
@@ -33,11 +33,10 @@ public class BackupHandler implements RequestHandler<ScheduledEvent, String> {
                 .region(Region.US_EAST_1)
                 .build();
 
-        // Get environment variables
         this.userPoolId = System.getenv("USER_POOL_ID");
         this.backupTable = System.getenv("BACKUP_TABLE");
 
-        // Initialize Gson with custom type adapter for Instant
+
         this.gson = new GsonBuilder()
                 .setPrettyPrinting()
                 .registerTypeAdapter(Instant.class, new InstantTypeAdapter())
@@ -69,8 +68,9 @@ public class BackupHandler implements RequestHandler<ScheduledEvent, String> {
             // Backup user pool configuration
             BackupService.backupUserPoolConfiguration(cognitoClient, dynamoDbClient, userPoolId, backupTable, gson, context);
 
-            // Backup user data
+
             BackupService.backupUserData(cognitoClient, dynamoDbClient, userPoolId, backupTable, gson, context);
+
 
             String successMessage = "Cognito user pool backup completed successfully";
             context.getLogger().log(successMessage);

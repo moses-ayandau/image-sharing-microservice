@@ -34,7 +34,7 @@ The application follows a microservices architecture pattern with the following 
 5. **Database Layer** - DynamoDB Global Tables
 6. **Monitoring & Alerting** - CloudWatch, Route53 Health Checks, and SNS
 
-![Architecture Diagram](https://via.placeholder.com/800x500?text=Architecture+Diagram)
+![Photo Blog Network Diagram](https://raw.githubusercontent.com/moses-ayandau/photo-blog-frontend/dev/Photo%20Blog%20App%20Network%20Diagram.vpd.jpg)
 
 ## 🧩 Components
 

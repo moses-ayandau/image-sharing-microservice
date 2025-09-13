@@ -1,127 +1,204 @@
-# photo-processing-blog
+# Photo Blog App(PixPath)
 
-This project contains source code and supporting files for a serverless application that you can deploy with the SAM CLI. It includes the following files and folders.
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Status](https://img.shields.io/badge/status-production-green)
 
-- HelloWorldFunction/src/main - Code for the application's Lambda function.
-- events - Invocation events that you can use to invoke the function.
-- HelloWorldFunction/src/test - Unit tests for the application code. 
-- template.yaml - A template that defines the application's AWS resources.
+A serverless, cloud-native image processing application deployed on AWS. This application allows users to upload, process, share, and manage their photos with features like recycling bin, auth protection, and multi-region resilience.
 
-The application uses several AWS resources, including Lambda functions and an API Gateway API. These resources are defined in the `template.yaml` file in this project. You can update the template to add AWS resources through the same deployment process that updates your application code.
+## 🔍 Overview
 
-If you prefer to use an integrated development environment (IDE) to build and test your application, you can use the AWS Toolkit.  
-The AWS Toolkit is an open source plug-in for popular IDEs that uses the SAM CLI to build and deploy serverless applications on AWS. The AWS Toolkit also adds a simplified step-through debugging experience for Lambda function code. See the following links to get started.
+This application is built using AWS Serverless technology stack, utilizing services such as Lambda, API Gateway, S3, DynamoDB, Cognito, SQS, and CloudWatch. It's designed to be scalable, fault-tolerant, and easy to deploy across multiple environments.
 
-* [CLion](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [GoLand](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [IntelliJ](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [WebStorm](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [Rider](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [PhpStorm](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [PyCharm](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [RubyMine](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [DataGrip](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [VS Code](https://docs.aws.amazon.com/toolkit-for-vscode/latest/userguide/welcome.html)
-* [Visual Studio](https://docs.aws.amazon.com/toolkit-for-visual-studio/latest/user-guide/welcome.html)
+The app enables users to upload, process, and manage their photos in a secure and reliable way, with features like authentication, image processing, sharing capabilities, recycling bin, and comprehensive health monitoring.
 
-## Deploy the sample application
+## ✨ Features
 
-The Serverless Application Model Command Line Interface (SAM CLI) is an extension of the AWS CLI that adds functionality for building and testing Lambda applications. It uses Docker to run your functions in an Amazon Linux environment that matches Lambda. It can also emulate your application's build environment and API.
+- **User Authentication** - Secure login/signup via Cognito with email verification
+- **Image Upload & Processing** - Upload and automatic processing of images
+- **Image Sharing** - Share images with other users
+- **Recycle Bin** - Soft delete with recovery options
+- **Cross-Region Replication** - Data storage across multiple AWS regions for disaster recovery
+- **Health Monitoring** - Comprehensive health checks and alerting
+- **Serverless Architecture** - Fully serverless deployment for maximum scalability
+- **HTTPS Support** - Secure communication with custom domain and SSL certificate
+- **Email Notifications** - Welcome emails and login alerts
 
-To use the SAM CLI, you need the following tools.
+## 🏗️ Architecture
 
-* SAM CLI - [Install the SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html)
-* java21 - [Install the Java 21](https://docs.aws.amazon.com/corretto/latest/corretto-21-ug/downloads-list.html)
-* Maven - [Install Maven](https://maven.apache.org/install.html)
-* Docker - [Install Docker community edition](https://hub.docker.com/search/?type=edition&offering=community)
+The application follows a microservices architecture pattern with the following main components:
 
-To build and deploy your application for the first time, run the following in your shell:
+1. **Client-facing API** - API Gateway with custom domain
+2. **Authentication Layer** - Cognito User Pool with custom triggers
+3. **Image Processing Pipeline** - Lambda functions with SQS queues
+4. **Storage Layer** - S3 buckets with lifecycle policies and cross-region replication
+5. **Database Layer** - DynamoDB Global Tables
+6. **Monitoring & Alerting** - CloudWatch, Route53 Health Checks, and SNS
+
+![Photo Blog Network Diagram](https://raw.githubusercontent.com/moses-ayandau/photo-blog-frontend/dev/Photo%20Blog%20App%20Network%20Diagram.vpd.jpg)
+
+## 🧩 Components
+
+### Services
+
+1. **Upload Service**
+    - Handles image uploads via API Gateway
+    - Stores images in a staging bucket
+    - Queues processing requests
+
+2. **Processing Service**
+    - Processes images from the staging bucket
+    - Creates thumbnails and various sizes
+    - Stores processed images in the processed bucket
+    - Updates metadata in DynamoDB
+
+3. **Listing Service**
+    - Retrieves and lists images for users
+    - Handles image sharing functionality
+
+4. **Recycle Service**
+    - Manages the recycle bin functionality
+    - Soft delete, restore, and permanent delete operations
+
+5. **Cognito Service**
+    - Handles authentication-related functionality
+    - Welcome emails and sign-in alerts
+    - User pool backups
+
+6. **Health Check Service**
+    - Monitors the health of all system components
+    - Exposes health check endpoints
+
+### Infrastructure Components
+
+- **S3 Buckets**:
+    - Staging bucket for initial uploads
+    - Processed bucket with versioning and replication
+    - Replica bucket in a different region for disaster recovery
+
+- **DynamoDB Tables**:
+    - Photo table for image metadata (Global Table)
+    - Backup table for Cognito user data (Global Table)
+
+- **API Gateway**:
+    - Regional endpoint with custom domain
+    - HTTPS support with ACM certificate
+    - CORS configuration
+
+- **Cognito**:
+    - User Pool with email verification
+    - Custom triggers for welcome emails and signin alerts
+
+- **SQS Queues**:
+    - Main processing queue
+    - Dead letter queue with automatic redrive policy
+
+- **Monitoring**:
+    - Route53 health checks
+    - CloudWatch alarms
+    - SNS topics for alerts
+
+## 🔧 Infrastructure as Code
+
+The application is defined using AWS SAM (Serverless Application Model) and CloudFormation. The main template file (`template.yaml`) defines all resources, permissions, and event sources.
+
+## 🚀 Deployment
+
+### Prerequisites
+
+- AWS CLI installed and configured
+- AWS SAM CLI installed
+- Java 21 JDK installed
+- Maven installed (for building Java Lambda functions)
+
+### Deployment Steps
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/moses-ayandau/image-sharing-microservice.git
+   cd photo-app
+   ```
+
+2. Build the project:
+   ```bash
+   mvn clean package
+   ```
+
+3. Deploy using SAM:
+   ```bash
+   sam deploy --guided
+   ```
+
+4. Follow the prompts to set parameters:
+    - Stack Name: `photo-app-stack`
+    - AWS Region: `us-east-1`
+    - Environment: `dev`, `test`, or `prod`
+    - Other parameters as needed
+
+### Multi-Environment Deployment
+
+The application supports multiple environments (dev, test, prod) through parameters:
 
 ```bash
-sam build
-sam deploy --guided
+# For development
+sam deploy --parameter-overrides Environment=dev
+
+# For testing
+sam deploy --parameter-overrides Environment=test
+
+# For production
+sam deploy --parameter-overrides Environment=prod
 ```
 
-The first command will build the source of your application. The second command will package and deploy your application to AWS, with a series of prompts:
+## 🔐 Environment Variables
 
-* **Stack Name**: The name of the stack to deploy to CloudFormation. This should be unique to your account and region, and a good starting point would be something matching your project name.
-* **AWS Region**: The AWS region you want to deploy your app to.
-* **Confirm changes before deploy**: If set to yes, any change sets will be shown to you before execution for manual review. If set to no, the AWS SAM CLI will automatically deploy application changes.
-* **Allow SAM CLI IAM role creation**: Many AWS SAM templates, including this example, create AWS IAM roles required for the AWS Lambda function(s) included to access AWS services. By default, these are scoped down to minimum required permissions. To deploy an AWS CloudFormation stack which creates or modifies IAM roles, the `CAPABILITY_IAM` value for `capabilities` must be provided. If permission isn't provided through this prompt, to deploy this example you must explicitly pass `--capabilities CAPABILITY_IAM` to the `sam deploy` command.
-* **Save arguments to samconfig.toml**: If set to yes, your choices will be saved to a configuration file inside the project, so that in the future you can just re-run `sam deploy` without parameters to deploy changes to your application.
+The application uses environment variables for configuration. These are defined in the CloudFormation template and passed to Lambda functions:
 
-You can find your API Gateway Endpoint URL in the output values displayed after deployment.
+| Variable | Description | Default Value |
+|----------|-------------|---------------|
+| `ENVIRONMENT` | Deployment environment | `test` |
+| `STAGING_BUCKET` | Name of the bucket for initial uploads | `image-staging-bucket-{env}-{account}` |
+| `PROCESSED_BUCKET` | Name of the bucket for processed images | `image-processed-bucket-{env}-{account}` |
+| `IMAGE_TABLE` | DynamoDB table for image metadata | `photo` |
+| `QUEUE_URL` | URL of the SQS processing queue | - |
+| `EMAIL_SOURCE` | Source email for notifications | `noreply@mscv2group2.link` |
+| `APP_URL` | Application frontend URL | `https://mscv2group2.link` |
 
-## Use the SAM CLI to build and test locally
+## 📡 API Endpoints
 
-Build your application with the `sam build` command.
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|--------------|
+| POST | `/upload` | Upload a new image | Yes |
+| GET | `/users/{userId}/images/active` | Get active images for a user | Yes |
+| GET | `/users/{userId}/images/deleted` | Get deleted images for a user | Yes |
+| POST | `/images/share` | Share an image with another user | Yes |
+| POST | `/images/{imageKey}/delete` | Move an image to recycle bin | Yes |
+| POST | `/images/{imageKey}/restore` | Restore an image from recycle bin | Yes |
+| DELETE | `/images/{imageKey}/permanent-delete` | Permanently delete an image | Yes |
+| GET | `/health` | General system health check | No |
+| GET | `/health/component/{component}` | Component-specific health check | No |
 
-```bash
-photo-processing-blog$ sam build
-```
+## 🔒 Security Features
 
-The SAM CLI installs dependencies defined in `HelloWorldFunction/pom.xml`, creates a deployment package, and saves it in the `.aws-sam/build` folder.
+- **Authentication** - Cognito User Pool with secure password policies
+- **Authorization** - API Gateway integrated with Cognito
+- **HTTPS** - All endpoints use HTTPS
+- **CORS** - Properly configured CORS for web clients
+- **S3 Bucket Policies** - Restricted public access
+- **IAM Least Privilege** - Specific permissions for each Lambda function
+- **Environment Isolation** - Separate resources per environment
 
-Test a single function by invoking it directly with a test event. An event is a JSON document that represents the input that the function receives from the event source. Test events are included in the `events` folder in this project.
+## 🌐 High Availability & Disaster Recovery
 
-Run functions locally and invoke them with the `sam local invoke` command.
+- **Multi-region deployment** - Resources deployed across primary and DR regions
+- **DynamoDB Global Tables** - Active-active replication between regions
+- **S3 Cross-Region Replication** - Data replicated to secondary region
+- **Automated Backups** - Regular backups of critical data (Cognito users)
+- **Health Monitoring** - Proactive detection of issues
 
-```bash
-photo-processing-blog$ sam local invoke HelloWorldFunction --event events/event.json
-```
+## 📊 Monitoring and Alerting
 
-The SAM CLI can also emulate your application's API. Use the `sam local start-api` to run the API locally on port 3000.
-
-```bash
-photo-processing-blog$ sam local start-api
-photo-processing-blog$ curl http://localhost:3000/
-```
-
-The SAM CLI reads the application template to determine the API's routes and the functions that they invoke. The `Events` property on each function's definition includes the route and method for each path.
-
-```yaml
-      Events:
-        HelloWorld:
-          Type: Api
-          Properties:
-            Path: /hello
-            Method: get
-```
-
-## Add a resource to your application
-The application template uses AWS Serverless Application Model (AWS SAM) to define application resources. AWS SAM is an extension of AWS CloudFormation with a simpler syntax for configuring common serverless application resources such as functions, triggers, and APIs. For resources not included in [the SAM specification](https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md), you can use standard [AWS CloudFormation](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html) resource types.
-
-## Fetch, tail, and filter Lambda function logs
-
-To simplify troubleshooting, SAM CLI has a command called `sam logs`. `sam logs` lets you fetch logs generated by your deployed Lambda function from the command line. In addition to printing the logs on the terminal, this command has several nifty features to help you quickly find the bug.
-
-`NOTE`: This command works for all AWS Lambda functions; not just the ones you deploy using SAM.
-
-```bash
-photo-processing-blog$ sam logs -n HelloWorldFunction --stack-name photo-processing-blog --tail
-```
-
-You can find more information and examples about filtering Lambda function logs in the [SAM CLI Documentation](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-logging.html).
-
-## Unit tests
-
-Tests are defined in the `HelloWorldFunction/src/test` folder in this project.
-
-```bash
-photo-processing-blog$ cd HelloWorldFunction
-HelloWorldFunction$ mvn test
-```
-
-## Cleanup
-
-To delete the sample application that you created, use the AWS CLI. Assuming you used your project name for the stack name, you can run the following:
-
-```bash
-sam delete --stack-name photo-processing-blog
-```
-
-## Resources
-
-See the [AWS SAM developer guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html) for an introduction to SAM specification, the SAM CLI, and serverless application concepts.
-
-Next, you can use AWS Serverless Application Repository to deploy ready to use Apps that go beyond hello world samples and learn how authors developed their applications: [AWS Serverless Application Repository main page](https://aws.amazon.com/serverless/serverlessrepo/)
+- **Health Checks** - Route53 health checks for API and components
+- **CloudWatch Alarms** - Alarms for errors, latency, and health issues
+- **SNS Notifications** - Email alerts for system administrators
+- **DLQ Monitoring** - Dead Letter Queue monitoring and auto-redrive
+- **Error Rate Monitoring** - Detection of API error rates

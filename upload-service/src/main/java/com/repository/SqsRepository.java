@@ -5,7 +5,6 @@ import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.MessageAttributeValue;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 import software.amazon.awssdk.services.sqs.model.SendMessageResponse;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.amazonaws.services.lambda.runtime.Context;
 
@@ -39,6 +38,13 @@ public class SqsRepository {
         this.objectMapper = new ObjectMapper();
     }
 
+    /**
+     * Send message (attribute) to SQS
+     * @param messageAttributes
+     * @param context
+     * @return
+     * @throws Exception
+     */
     public Map<String, Object> sendMessage(Map<String, String> messageAttributes, Context context) throws Exception {
         Map<String, Object> result = new HashMap<>();
         messageAttributes.put("messageType", "userUpload");
